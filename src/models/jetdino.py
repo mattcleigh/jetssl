@@ -9,7 +9,6 @@ from torch.nn.functional import (
     log_softmax,
     normalize,
     pairwise_distance,
-    softmax,
 )
 from torchmetrics import Accuracy
 
@@ -17,8 +16,7 @@ from mltools.mltools.lightning_utils import simple_optim_sched
 from mltools.mltools.modules import IterativeNormLayer
 from mltools.mltools.torch_utils import ema_param_sync, set_eval
 from mltools.mltools.transformers import Transformer
-from src.models.utils import JetBackbone
-from src.models.utils import MLP
+from src.models.utils import MLP, JetBackbone
 
 # TODO(Matthew): Make this a parameter... somehow
 # 001
@@ -34,7 +32,7 @@ class DINOv2Loss(nn.Module):
         self.t_temp = t_temp
 
     def center_teacher_outputs(self, t_out: T.Tensor) -> T.Tensor:
-        """Apply sinkhorn-Knopp centering to the teacher outputs"""
+        """Apply sinkhorn-Knopp centering to the teacher outputs."""
         Q = T.exp(t_out.float() / self.t_temp).t()
         B = Q.shape[1]  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
@@ -113,7 +111,7 @@ class JetDINO(pl.LightningModule):
         self.projector = MLP(
             inpt_dim=self.output_dim,
             outp_dim=self.output_dim,
-            hddn_dim=2*self.output_dim,
+            hddn_dim=2 * self.output_dim,
             num_blocks=2,
             norm="LayerNorm",
             act_h="SiLU",
@@ -232,7 +230,7 @@ class JetDINO(pl.LightningModule):
         x = self.projector(x)  # Project into the contrastive space
 
         # Split off the registers, keep 1 for the cls token, others are dropped
-        return x[:, 0], x[:, self.encoder.num_registers:]
+        return x[:, 0], x[:, self.encoder.num_registers :]
 
     def pass_teacher(
         self,
@@ -244,7 +242,7 @@ class JetDINO(pl.LightningModule):
         x = self.t_ctst_embedder(csts) + self.t_csts_id_embedder(csts_id)
         x = self.t_encoder(x, mask=mask)
         x = self.t_projector(x)
-        return x[:, 0], x[:, self.t_encoder.num_registers:]
+        return x[:, 0], x[:, self.t_encoder.num_registers :]
 
     def pass_student(
         self,
@@ -256,7 +254,7 @@ class JetDINO(pl.LightningModule):
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
         x = self.encoder(x, mask=mask)
         x = self.projector(x)
-        return x[:, 0], x[:, self.encoder.num_registers:]
+        return x[:, 0], x[:, self.encoder.num_registers :]
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
         return self._shared_step(sample, batch_idx, "train")

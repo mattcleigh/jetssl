@@ -10,7 +10,6 @@ singularity-args: >- # multi-line string
   --env WANDB_API_KEY=$WANDB_API_KEY
   --bind /srv,/home
 executor: slurm
-jobs: 100
 default-resources:
   slurm_account: golling
   slurm_partition: shared-cpu,private-dpnc-cpu

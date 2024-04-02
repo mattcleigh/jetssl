@@ -73,7 +73,6 @@ def knn_masking(
     mask_fraction: float = 0.3,
     seed: int | None = None,
 ) -> np.ndarray:
-
     # Default slice
     if pos_dims is None:
         pos_dims = slice(1, 3)

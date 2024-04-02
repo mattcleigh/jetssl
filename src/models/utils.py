@@ -1,4 +1,5 @@
 from copy import deepcopy
+
 import torch as T
 from torch import nn
 from torchdiffeq import odeint
@@ -61,7 +62,9 @@ class VectorDiffuser(nn.Module):
         )
         self.ema_mlp = deepcopy(self.mlp)
 
-    def forward(self, xt: T.Tensor, t: T.Tensor, ctxt: T.Tensor, use_ema: bool = False) -> T.Tensor:
+    def forward(
+        self, xt: T.Tensor, t: T.Tensor, ctxt: T.Tensor, use_ema: bool = False
+    ) -> T.Tensor:
         """Get the fully denoised estimate."""
         c = T.cat([self.time_encoder(t), ctxt], dim=-1)
         mlp = self.ema_mlp if use_ema else self.mlp

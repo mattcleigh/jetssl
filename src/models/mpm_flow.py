@@ -23,7 +23,6 @@ class MPMFlow(MPMBase):
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the loss under the flow."""
-
         # The flow can't handle discrete targets
         # So we need to add noise to the csts features
         # This is a hack because it is hardcoded but works for now
