@@ -1,0 +1,29 @@
+# Directories
+__pycache__
+data/
+logs/
+outputs/
+plots/
+.vscode/
+container/
+wandb/
+configs/sweeps/
+slurmscripts/
+user**/**
+**user**
+*.snakemake
+*.pytest
+
+# Just do all hidden files (bite me future me... or sam)
+.*/
+
+# File types
+launch.json
+.mypy*
+*workspace
+*.pyc
+*.ipynb
+*.out
+*.sh
+*.log
+*.idea

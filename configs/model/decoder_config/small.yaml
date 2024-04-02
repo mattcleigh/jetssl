@@ -1,0 +1,11 @@
+dim: 256
+num_layers: 4
+do_packed: True # Much faster training but requires half precision
+do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
+# do_absolute_enc: True # We have decided to use absolute positional encoding for decoder
+num_registers: 0 # Decoder MUST not have registers. Those are added by encoder
+do_final_norm: False
+layer_config:
+  num_heads: 4
+  ff_mult: 2
+  do_self_attn: True

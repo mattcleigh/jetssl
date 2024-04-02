@@ -1,0 +1,10 @@
+_target_: src.models.finetune.Classifier
+
+backbone_path: /srv/fast/share/rodem/flowbert/jetbert/dino/backbone.pkl
+reinstantiate: False
+
+defaults:
+  - _self_
+  - optimizer: default.yaml
+  - scheduler: warmup.yaml
+  - class_head: ca.yaml

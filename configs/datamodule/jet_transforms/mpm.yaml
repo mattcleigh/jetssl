@@ -1,0 +1,13 @@
+_target_: src.datamodules.transforms.compose
+_partial_: True
+transforms:
+  - _target_: src.datamodules.transforms.log_squash_csts_pt
+    _partial_: True
+  - _target_: src.datamodules.transforms.tanh_d0_dz
+    _partial_: True
+  - _target_: src.datamodules.transforms.apply_masking
+    _partial_: True
+    masking_fn:
+      _target_: src.datamodules.masking.random_masking
+      _partial_: True
+      mask_fraction: 0.5

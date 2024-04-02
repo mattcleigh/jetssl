@@ -1,0 +1,28 @@
+defaults:
+  - jetclass_base/mappable@train_set
+  - jetclass_base/mappable@val_set
+  - jetclass_base/mappable@test_set
+  - jet_transforms/standard@train_set.transforms
+  - jet_transforms/standard@val_set.transforms
+  - jet_transforms/standard@test_set.transforms
+
+_target_: src.datamodules.hdf.JetDataModule
+
+train_set:
+  path: ${paths.data_dir}/JetClassH5/train_100M/
+  n_files: 1 # For debugging
+
+val_set:
+  path: ${paths.data_dir}/JetClassH5/val_5M/
+  n_files: 1 # Really dont need 5 million validation events
+
+test_set:
+  path: ${paths.data_dir}/JetClassH5/test_20M/
+  n_files: 1 # Really dont need 20 million testing events
+
+
+loader_config:
+  batch_size: 1250
+  num_workers: 1
+  drop_last: true
+  shuffle: true

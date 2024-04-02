@@ -1,0 +1,52 @@
+# pytorch / deep learning
+torch
+lightning
+torchmetrics
+wandb
+normflows
+
+# Flash attention 2
+packaging
+ninja
+flash-attn
+
+# General data handling
+pyarrow
+parquet
+fastparquet
+
+# Needed for opening the jetclass data files
+uproot
+lz4
+xxhash
+
+# diffusion stuff
+k-diffusion
+
+# hydra
+hydra-core
+hydra-colorlog
+
+# plotting
+matplotlib
+seaborn
+plotly
+
+# data science
+numpy
+scipy
+scikit-learn
+scikit-hep
+pandas
+tables
+h5py
+pykeops
+
+# other
+black
+pylint
+dotmap
+rootutils
+pre-commit
+rich
+pytest

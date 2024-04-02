@@ -1,0 +1,12 @@
+_target_: src.datamodules.hdf.JetMappable
+_partial_: True
+path: /srv/fast/share/rodem/shlomi
+n_classes: 3
+n_files: 1
+features:
+- [csts, f, null]
+- [mask, bool, null]
+- [csts_id, l, null]
+- [labels, l, null]
+- [vtx_id, l, null]
+- [vtx_pos, l, null]

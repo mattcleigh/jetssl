@@ -1,0 +1,10 @@
+dim: 256
+num_layers: 8
+do_input_linear: True
+do_absolute_enc: False
+num_registers: 4
+do_final_norm: False
+layer_config:
+  num_heads: 8
+  ff_mult: 2
+  do_self_attn: True

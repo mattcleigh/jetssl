@@ -1,0 +1,4 @@
+_target_: mltools.mltools.lightning_utils.linear_warmup_cosine_decay
+_partial_: true
+warmup_ratio: 0.1
+total_steps: 99999 # Replaced by trainer max_epochs for a one cycle

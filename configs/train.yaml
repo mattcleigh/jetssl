@@ -1,0 +1,29 @@
+# @package _global_
+
+# Order indicates overwriting
+defaults:
+  - _self_
+  - trainer: default.yaml
+  - model: mpmreg.yaml
+  - datamodule: jetclass_masked.yaml
+  - loggers: default.yaml
+  - hydra: default.yaml
+  - paths: default.yaml
+  - callbacks: default.yaml
+  - experiment: train_mpm.yaml
+
+seed: 42 # For reproducibility
+project_name: diffbeit # Determines output directory path and wandb project
+network_name: test_generator # Used for both saving and wandb
+ckpt_path: null  # Checkpoint path to resume training
+
+# Extra tweaks available with the new pytorch version
+precision: medium # Should use medium if on ampere gpus
+compile: null # Can set to default for faster compiles
+tags: null # Extra tags passed to the logger
+
+# COMPLETELY replaces the above config with what is contained in ${paths.full_path}
+# This is ideal for resuming a job, log to the same directory
+# Will also resume the loggers and set the ckpt_path to the latest
+full_resume: False
+ckpt_flag: last.ckpt # Name of the checkpoint file, can use wildcards

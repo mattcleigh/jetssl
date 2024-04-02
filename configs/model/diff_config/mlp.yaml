@@ -1,0 +1,22 @@
+min_sigma: 1.0e-5
+max_sigma: 80
+p_mean: -1.2
+p_std: 1.2
+cosine_config:
+  encoding_dim: 16
+  scheme: exponential
+mlp_config:
+  num_blocks: 2
+  hddn_dim: 768
+  nrm: layer
+  act_h: silu
+
+sampler_function:
+  _target_: mltools.mltools.diffusion.sample_heun
+  _partial_: True
+
+sigma_function:
+  _target_: mltools.mltools.diffusion.get_sigmas_karras
+  _partial_: True
+  n_steps: 50
+  rho: 7

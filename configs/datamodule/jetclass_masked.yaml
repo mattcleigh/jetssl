@@ -1,0 +1,33 @@
+defaults:
+  - jetclass_base/mappartial@train_set
+  - jetclass_base/mappable@val_set
+  - jetclass_base/mappable@test_set
+  - jet_transforms/mpm@train_set.transforms
+  - jet_transforms/mpm@val_set.transforms
+  - jet_transforms/mpm@test_set.transforms
+
+_target_: src.datamodules.hdf.JetDataModule
+
+train_set:
+  path: ${paths.data_dir}/JetClassH5/train_100M/
+  # shuffle: true
+  # n_files: 2 # For debugging
+
+val_set:
+  path: ${paths.data_dir}/JetClassH5/val_5M/
+  n_files: 1 # Really dont need 5 million validation events
+
+test_set:
+  path: ${paths.data_dir}/JetClassH5/test_20M/
+
+loader_config:
+  batch_size: 1000 # Must divide 1M to prevent lightning error with dropped batches
+  num_workers: 3 # Speed testing show that 3 workers is enough even with augs
+  drop_last: false
+  shuffle: true
+  # collate_fn: # Dont need this for now as we are using packed attention
+  #   _target_: src.datamodules.collation.collate_with_fn
+  #   _partial_: true
+  #   fn:
+  #     _target_: src.datamodules.collation.minimize_padding
+  #     _partial_: true

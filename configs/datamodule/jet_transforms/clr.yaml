@@ -1,0 +1,14 @@
+_target_: src.datamodules.transforms.compose
+_partial_: True
+transforms:
+  - _target_: src.datamodules.transforms.get_augmented_twins
+    _partial_: True
+    augmentation:
+      _target_: src.datamodules.augmentations.AugmentationSequence
+      aug_list:
+        - _target_: src.datamodules.augmentations.Crop
+        - _target_: src.datamodules.augmentations.CollinearSplit
+        - _target_: src.datamodules.augmentations.RandomRotate
+        - _target_: src.datamodules.augmentations.Smear
+  - _target_: src.datamodules.transforms.log_squash_csts_pt
+    _partial_: True

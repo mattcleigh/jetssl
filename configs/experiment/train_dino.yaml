@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - override /datamodule: jetclass_clr.yaml
+  - override /model: jetdino.yaml
+
+# For faster training
+precision: medium
+compile: null
+
+# Model modifications
+project_name: mpm
+network_name: jetdino

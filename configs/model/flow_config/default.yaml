@@ -1,0 +1,11 @@
+num_stacks: 6
+mlp_width: 64
+mlp_depth: 2
+mlp_act: silu
+tail_bound: 4.0
+dropout: 0.0
+num_bins: 8
+do_lu: False
+init_identity: True
+do_norm: False
+flow_type: coupling

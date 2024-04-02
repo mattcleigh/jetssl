@@ -1,0 +1,9 @@
+_target_: mltools.mltools.transformers.ClassAttentionPooling
+_partial_: true
+num_layers: 1
+dim: 128
+layer_config:
+  num_heads: 4
+  ff_mult: 2
+do_input_linear: True
+do_output_linear: True
