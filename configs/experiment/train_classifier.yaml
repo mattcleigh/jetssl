@@ -7,11 +7,11 @@ defaults:
 
 # Dont train for too long
 trainer:
-  max_steps: 50000
-  # max_epochs: 10
+  max_epochs: null
+  max_steps: 100000
 
 # Key parameters for fine-tuning
-# n_jets: 10000 # One tenth of the training set
+n_jets: 10000 # Number of jets per class
 
 # Never finetune on the full dataset, always 1 file and n_jets
 datamodule:
@@ -30,5 +30,5 @@ precision: medium
 compile: null
 
 # Bookkeeping
-project_name: mpm
-network_name: finetuned
+project_name: jetssl_finetuning
+network_name: classifier_${n_jets}

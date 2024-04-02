@@ -42,7 +42,8 @@ class Classifier(LightningModule):
 
         # Create the head for the downstream task
         self.class_head = class_head(
-            inpt_dim=self.backbone.encoder.outp_dim, outp_dim=n_classes
+            inpt_dim=self.backbone.encoder.outp_dim,
+            outp_dim=n_classes,
         )
 
         # Loss and metrics

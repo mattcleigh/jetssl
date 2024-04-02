@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 from functools import partial
 
@@ -36,12 +37,11 @@ class DINOv2Loss(nn.Module):
         Q = T.exp(t_out.float() / self.t_temp).t()
         B = Q.shape[1]  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
-        Q /= T.sum(Q)
+        Q /= Q.sum()
         for _ in range(3):
-            sum_of_rows = T.sum(Q, dim=1, keepdim=True)
-            Q /= sum_of_rows
+            Q /= Q.sum(dim=1, keepdim=True)
             Q /= K
-            Q /= T.sum(Q, dim=0, keepdim=True)
+            Q /= Q.sum(dim=0, keepdim=True)
             Q /= B
         Q *= B
         return Q.t()
@@ -162,16 +162,20 @@ class JetDINO(pl.LightningModule):
         with set_eval(self), T.no_grad():
             cls_t, x_t = self.pass_teacher(normed_csts, csts_id, mask)
 
-        # Get the koleo loss on the class tokens using both student views
+        # Get the koleo loss
         loss_reg = koleo_loss(cls_s1) + koleo_loss(cls_s2)
+        loss_reg += koleo_loss(x_s1[mask]) + koleo_loss(x_s2[mask])
 
         # Get the dino losses for the class tokens using both student views
         t = self.dino_loss.center_teacher_outputs(cls_t)
         loss_dino = self.dino_loss(cls_s1, t) + self.dino_loss(cls_s2, t)
 
-        # Get the ibot losses for the constituent tokens
-        t = self.dino_loss.center_teacher_outputs(x_t[mask])
-        loss_ibot = self.dino_loss(x_s1[mask], t) + self.dino_loss(x_s2[mask], t)
+        # Get the ibot losses for the constituent tokens a 5th of the time
+        if random.random() < 0.2:
+            t = self.dino_loss.center_teacher_outputs(x_t[mask])
+            loss_ibot = self.dino_loss(x_s1[mask], t) + self.dino_loss(x_s2[mask], t)
+        else:
+            loss_ibot = T.tensor(0.0, device=self.device)
 
         # Combine the losses
         total_loss = loss_dino + loss_ibot + self.reg_strenth * loss_reg
@@ -189,7 +193,7 @@ class JetDINO(pl.LightningModule):
             ema_param_sync(self.projector, self.t_projector, self.t_ema)
 
         # Dont run probe too often as we must be fair to MPM!
-        if batch_idx % 10 == 0 or prefix == "valid":
+        if batch_idx % 20 == 0 or prefix == "valid":
             class_out = self.classifier_head(x_t.detach(), mask=mask)
             probe_loss = cross_entropy(class_out, labels)
             total_loss += probe_loss

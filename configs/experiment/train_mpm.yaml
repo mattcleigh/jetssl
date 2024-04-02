@@ -3,7 +3,7 @@
 
 defaults:
   - override /datamodule: jetclass_masked
-  - override /model: jetdino # jetdino, mpmflow, mpmreg, mpmtoken, mpmdiff
+  - override /model: mpmflow # jetdino, mpmflow, mpmreg, mpmtoken, mpmdiff, mpmonlyid
 
 # For faster training
 precision: medium
@@ -11,10 +11,10 @@ compile: null
 
 # Allows us to use the partially mappable datasets
 trainer:
-  max_epochs: 9999
-  reload_dataloaders_every_n_epochs: 1
-  check_val_every_n_epoch: 10
+  max_epochs: 9999999999999
+  reload_dataloaders_every_n_epochs: 3
+  check_val_every_n_epoch: 1
 
 # Model modifications
-project_name: new_mae
-network_name: dino2 # dino, flow, reg, token, diff
+project_name: jetssl
+network_name: flow # dino, flow, reg, token, diff, onlyid

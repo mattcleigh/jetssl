@@ -9,8 +9,8 @@ def main() -> None:
     """Main executable script."""
     standard_job_array(
         job_name="pretraining",
-        work_dir="/home/users/l/leighm/DiffBEIT/scripts",
-        log_dir="/home/users/l/leighm/DiffBEIT/logs/",
+        work_dir=root / "scripts",
+        log_dir=root / "logs",
         image_path="/srv/fast/share/rodem/images/diffbeit-image_latest.sif",
         command="python train.py",
         n_gpus=1,
@@ -22,20 +22,31 @@ def main() -> None:
         opt_dict={
             "network_name": [
                 "dino",
-                "reg",
-                "token",
-                "diff",
-                "onlyid",
+                # "reg",
+                # "token",
+                # "diff",
+                # "flow",
+                # "onlyid",
             ],
             "model": [
                 "jetdino",
-                "mpmreg",
-                "mpmtoken",
-                "mpmdiff",
-                "mpmonlyid",
+                # "mpmreg",
+                # "mpmtoken",
+                # "mpmdiff",
+                # "mpmflow",
+                # "mpmonlyid",
+            ],
+            "datamodule.loader_config.batch_size": [
+                500,
+                # 1000,
+                # 1000,
+                # 1000,
+                # 1000,
+                # 1000,
             ],
         },
         use_dashes=False,
+        is_grid=False,
     )
 
 

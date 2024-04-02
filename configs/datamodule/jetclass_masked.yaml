@@ -10,8 +10,6 @@ _target_: src.datamodules.hdf.JetDataModule
 
 train_set:
   path: ${paths.data_dir}/JetClassH5/train_100M/
-  # shuffle: true
-  # n_files: 2 # For debugging
 
 val_set:
   path: ${paths.data_dir}/JetClassH5/val_5M/
@@ -21,13 +19,7 @@ test_set:
   path: ${paths.data_dir}/JetClassH5/test_20M/
 
 loader_config:
-  batch_size: 1000 # Must divide 1M to prevent lightning error with dropped batches
+  batch_size: 1000
   num_workers: 3 # Speed testing show that 3 workers is enough even with augs
   drop_last: false
   shuffle: true
-  # collate_fn: # Dont need this for now as we are using packed attention
-  #   _target_: src.datamodules.collation.collate_with_fn
-  #   _partial_: true
-  #   fn:
-  #     _target_: src.datamodules.collation.minimize_padding
-  #     _partial_: true

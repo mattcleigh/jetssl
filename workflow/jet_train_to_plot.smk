@@ -27,7 +27,7 @@ plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 
 # Define the models to train. Key=network_name, Value=List of hydra parameters
 model_list = {
-    "onlyid": ["model=mpmreg", "model._target_=src.models.mpm_base.MPMBase"],
+    "onlyid": ["model=mpmreg"],
     "kmeans": ["model=mpmtoken"],
     "flow": ["model=mpmflow"],
     "regression": ["model=mpmreg"],
@@ -40,6 +40,9 @@ downstream_tasks = {
     "shlomi": ["experiment=train_jetclassifier", "datamodule=shlomi"],
     # "vtx": ["experiment=train_jetvertex", "datamodule=shlomi"],
 }
+
+# The number of jets to use per downstream task
+n_jets = [1e3, 5e3, 1e4, 5e4, 1e5]
 
 ########################################
 

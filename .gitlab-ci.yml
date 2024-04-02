@@ -1,33 +1,16 @@
+workflow:
+  rules: # Run on everything except merge requests
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - when: always
+
 stages:
   - lint
   - build
+  - tests
 
-pre-commit:
-  stage: lint
-  image: python:3.10
-  script:
-    - python3 -m pip install pre-commit==3.4.0
-    - pre-commit run --all-files
-  allow_failure: True
 
-build_latest:
-  stage: build
-  only:
-    changes:
-      - docker/Dockerfile
-      - docker/requirements.txt
-      - .gitlab-ci.yml
-  image:
-    name: gitlab-registry.cern.ch/ci-tools/docker-image-builder
-    entrypoint: [""]
-  variables:
-    TAG: latest
-    IMAGE_NAME: diffbeit-image
-    DOCKER_FILE: "${CI_PROJECT_DIR}/docker/Dockerfile"
-    TO: "${CI_REGISTRY_IMAGE}/${IMAGE_NAME}:${TAG}"
-  script:
-    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor
-      --context "${CI_PROJECT_DIR}"
-      --dockerfile "${DOCKER_FILE}"
-      --destination "${TO}"
+include:
+  - .gitlab/.ci-pre-commit.yaml
+  - .gitlab/.ci-build.yaml
+  - .gitlab/.ci-test.yaml

@@ -3,9 +3,8 @@ num_layers: 8
 do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for encoder!
-num_registers: 4
+num_registers: 8
 do_final_norm: False
 layer_config:
   num_heads: 8
   ff_mult: 2
-  do_self_attn: True

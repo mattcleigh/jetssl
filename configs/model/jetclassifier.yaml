@@ -1,6 +1,6 @@
-_target_: src.models.finetune.Classifier
+_target_: src.models.classifier.Classifier
 
-backbone_path: /srv/fast/share/rodem/flowbert/jetbert/dino/backbone.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl/reg/backbone.pkl
 reinstantiate: False
 
 defaults:

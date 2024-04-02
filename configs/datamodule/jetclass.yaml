@@ -1,5 +1,5 @@
 defaults:
-  - jetclass_base/mappable@train_set
+  - jetclass_base/mappable@train_set # We use mappable datasets
   - jetclass_base/mappable@val_set
   - jetclass_base/mappable@test_set
   - jet_transforms/standard@train_set.transforms
@@ -10,7 +10,7 @@ _target_: src.datamodules.hdf.JetDataModule
 
 train_set:
   path: ${paths.data_dir}/JetClassH5/train_100M/
-  n_files: 1 # For debugging
+  n_files: 1 # Classifiers are trained on subset of the data
 
 val_set:
   path: ${paths.data_dir}/JetClassH5/val_5M/
@@ -19,7 +19,6 @@ val_set:
 test_set:
   path: ${paths.data_dir}/JetClassH5/test_20M/
   n_files: 1 # Really dont need 20 million testing events
-
 
 loader_config:
   batch_size: 1250

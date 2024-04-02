@@ -1,6 +1,6 @@
 <div align="center">
 
-DiffBEIT
+# JetSSL
 
 [![python](https://img.shields.io/badge/-Python_3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![pytorch](https://img.shields.io/badge/-PyTorch_2.1-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -13,10 +13,14 @@ This project is generated from the RODEM template for training deep learning mod
 
 ## Submodules
 
-This project relies on a custom submodule called `mltools`.
+This project relies on a custom submodule called `mltools` stored [here](https://gitlab.cern.ch/mleigh/mltools/-/tree/master) on CERN GitLab.
 This is a collection of useful functions, layers and networks for deep learning developed by the RODEM group at UNIGE.
 
-[MLTools Repo](https://gitlab.cern.ch/mleigh/mltools/-/tree/master)
+If you didn't clone the project with the `--recursive` flag you can pull the submodule using:
+
+```
+git submodule update --init --recursive
+```
 
 ## Configuration
 
@@ -33,11 +37,11 @@ To run this project, follow these steps:
 
 1. Pull the docker image from the hub
 ```
-apptainer pull docker://gitlab-registry.cern.ch/mleigh/diffbeit/diffbeit-image
+apptainer pull docker://gitlab-registry.cern.ch/mleigh/jetssl:latest
 ```
 2. Run the training script with the desired configuration inside the container:
 ```
-python scripts/train.py experiment=train_jetbert_kmeans.yaml
+python scripts/train.py experiment=train_mpm.yaml
 ```
 
 ## Docker and Gitlab

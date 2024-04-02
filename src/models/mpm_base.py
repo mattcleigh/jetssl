@@ -96,7 +96,7 @@ class MPMBase(pl.LightningModule):
         loss = id_loss + cst_loss
 
         # Use the probe on all inputs! Not very often!
-        if batch_idx % 10 == 0 or prefix == "valid":
+        if batch_idx % 20 == 0 or prefix == "valid":
             with set_eval(self), T.no_grad():
                 full, full_mask = self.full_pass(normed_csts, csts_id, mask)
             probe_loss = self.get_probe_loss(full.detach(), full_mask.detach(), labels)
@@ -191,7 +191,7 @@ class MPMBase(pl.LightningModule):
         id_probs = T.softmax(id_outs, dim=-1)
         return T.multinomial(id_probs, 1).squeeze(1)
 
-    def sample_csts(self, _decoder_outs: T.Tensor) -> T.Tensor:
+    def sample_csts(self, decoder_outs: T.Tensor) -> T.Tensor:
         """Return a collection of csts samples under the learned distribution."""
         return T.tensor(0.0, device=self.device)
 

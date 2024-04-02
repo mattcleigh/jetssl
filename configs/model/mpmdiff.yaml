@@ -7,8 +7,10 @@ diff_config:
   mlp_config:
     num_blocks: 3
     hddn_dim: 128
-    act_h: swish
-    nrm: layer
+    act_h: SiLU
+    norm: LayerNorm
+    do_res: True
+    init_zeros: True
 
 defaults:
   - _self_
