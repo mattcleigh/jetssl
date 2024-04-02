@@ -10,11 +10,11 @@ defaults:
   - hydra: default.yaml
   - paths: default.yaml
   - callbacks: default.yaml
-  - experiment: train_mpm.yaml
+  - experiment: null
 
 seed: 42 # For reproducibility
-project_name: diffbeit # Determines output directory path and wandb project
-network_name: test_generator # Used for both saving and wandb
+project_name: jetssl # Determines output directory path and wandb project
+network_name: test # Used for both saving and wandb
 ckpt_path: null  # Checkpoint path to resume training
 
 # Extra tweaks available with the new pytorch version

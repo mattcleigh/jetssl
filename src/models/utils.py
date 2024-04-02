@@ -1,9 +1,11 @@
+from copy import deepcopy
 import torch as T
 from torch import nn
 from torchdiffeq import odeint
 
 from mltools.mltools.mlp import MLP
 from mltools.mltools.modules import CosineEncodingLayer
+from mltools.mltools.torch_utils import ema_param_sync
 
 
 class JetBackbone(nn.Module):
@@ -33,7 +35,7 @@ class JetBackbone(nn.Module):
         if do_norm:
             csts = self.normaliser(csts, mask)
         x = self.ctst_embedder(csts) + self.id_embedder(csts_id)
-        x = self.encoder(x, kv_mask=mask)
+        x = self.encoder(x, mask=mask)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
 
@@ -57,17 +59,23 @@ class VectorDiffuser(nn.Module):
             ctxt_dim=ctxt_dim + time_dim,
             **mlp_config,
         )
+        self.ema_mlp = deepcopy(self.mlp)
 
-    def forward(self, xt: T.Tensor, t: T.Tensor, ctxt: T.Tensor) -> T.Tensor:
+    def forward(self, xt: T.Tensor, t: T.Tensor, ctxt: T.Tensor, use_ema: bool = False) -> T.Tensor:
         """Get the fully denoised estimate."""
         c = T.cat([self.time_encoder(t), ctxt], dim=-1)
-        return self.mlp(xt, c)
+        mlp = self.ema_mlp if use_ema else self.mlp
+        return mlp(xt, c)
 
     def get_loss(self, x0: T.Tensor, ctxt: T.Tensor) -> T.Tensor:
         t = T.sigmoid(T.randn(x0.shape[0], 1, device=x0.device))
         x1 = T.randn_like(x0)
         xt = (1 - t) * x0 + t * x1
         v = self.forward(xt, t, ctxt)
+
+        if self.training:
+            ema_param_sync(self.mlp, self.ema_mlp, 0.9995)
+
         return (v - (x1 - x0)).square().mean()
 
     def generate(self, x1: T.Tensor, ctxt: T.Tensor, times: T.Tensor) -> T.Tensor:
@@ -75,7 +83,7 @@ class VectorDiffuser(nn.Module):
 
         def ode_fn(t, xt):
             t = t * xt.new_ones([xt.shape[0], 1])
-            return self(xt, t, ctxt)
+            return self.forward(xt, t, ctxt, use_ema=True)
 
         return odeint(ode_fn, x1, times, method="midpoint")[-1]
 

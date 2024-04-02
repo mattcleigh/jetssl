@@ -17,13 +17,14 @@ class MPMDiff(MPMBase):
 
     def masked_cst_loss(
         self,
-        csts: T.Tensor,
+        normed_csts: T.Tensor,
+        csts_id: T.Tensor,
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the diffusion loss."""
         return self.diff.get_loss(
-            csts[null_mask], self.csts_head(decoder_outs[null_mask])
+            normed_csts[null_mask], self.csts_head(decoder_outs[null_mask])
         )
 
     @T.no_grad()

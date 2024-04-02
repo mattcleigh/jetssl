@@ -51,7 +51,7 @@ class Classifier(LightningModule):
 
     def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor) -> tuple:
         x, mask = self.backbone(csts, csts_id, mask)
-        return self.class_head(x, kv_mask=mask)
+        return self.class_head(x, mask=mask)
 
     def _shared_step(self, sample: tuple, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""

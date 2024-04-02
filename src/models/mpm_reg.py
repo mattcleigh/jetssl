@@ -13,13 +13,14 @@ class MPMReg(MPMBase):
 
     def masked_cst_loss(
         self,
-        csts: T.Tensor,
+        normed_csts: T.Tensor,
+        csts_id: T.Tensor,
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the loss using direct regression."""
         csts_out = self.csts_head(decoder_outs[null_mask])
-        return (csts[null_mask] - csts_out).abs().mean()
+        return (normed_csts[null_mask] - csts_out).abs().mean()
 
     def sample_csts(self, decoder_outs: T.Tensor) -> list:
         """Get an estimate of the dropped csts using the outputs."""

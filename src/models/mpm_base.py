@@ -72,12 +72,6 @@ class MPMBase(pl.LightningModule):
         self.classifier_head = class_head(inpt_dim=self.encoder.dim, outp_dim=n_classes)
         self.acc = Accuracy("multiclass", num_classes=n_classes)
 
-    def process_data(
-        self: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor, null_mask: T.BoolTensor
-    ) -> tuple:
-        """Process the data before passing through the model."""
-        return self, csts_id, mask, null_mask
-
     def _shared_step(self, sample: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
         # Unpack the sample
@@ -90,18 +84,13 @@ class MPMBase(pl.LightningModule):
         # Normalise the continuous features and update the stats
         normed_csts = self.normaliser(csts, mask)
 
-        # Use the callback to process the data (needed for the flow)
-        normed_csts, csts_id, mask, null_mask = self.process_data(
-            normed_csts, csts_id, mask, null_mask
-        )
-
         # Encode and decode
         enc_outs, enc_mask = self.drop_and_encode(normed_csts, csts_id, mask, null_mask)
         decoder_outs = self.combine_and_decode(enc_outs, enc_mask, mask, null_mask)
 
         # Pass through the different heads and get the reconstruction losses
         id_loss = self.masked_id_loss(csts_id, null_mask, decoder_outs)
-        cst_loss = self.masked_cst_loss(normed_csts, null_mask, decoder_outs)
+        cst_loss = self.masked_cst_loss(normed_csts, csts_id, null_mask, decoder_outs)
 
         # Combine the losses
         loss = id_loss + cst_loss
@@ -142,21 +131,16 @@ class MPMBase(pl.LightningModule):
         # Pass the inputs through their respective embedding layers and sum
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
 
-        # Use minimal padding for the encoder pass, this removes the null nodes
-        # Skipping this step for now as we test packed-attention (non padded)
-        # x, mask = minimize_padding(x, mask & ~null_mask)
-
         # Pass through the encoder (might gain registers)
-        x = self.encoder(x, kv_mask=mask & ~null_mask)
+        x = self.encoder(x, mask=mask & ~null_mask)
         mask = self.encoder.get_combined_mask(mask)
-
         return x, mask
 
     def combine_and_decode(
         self,
         enc_outs: T.Tensor,
         enc_mask: T.Tensor,
-        _mask: T.BoolTensor,
+        mask: T.BoolTensor,
         null_mask: T.BoolTensor,
     ) -> T.Tensor:
         """Recombine the encoder outputs with the dropped nodes and decode."""
@@ -176,7 +160,7 @@ class MPMBase(pl.LightningModule):
         dec_inpts[:, n_reg:][null_mask] = nt[null_sorted].type(dec_inpts.dtype)
 
         # Pass through the decoder dont need registers after
-        return self.decoder(dec_inpts, kv_mask=enc_mask)[:, n_reg:]
+        return self.decoder(dec_inpts, mask=enc_mask)[:, n_reg:]
 
     def masked_id_loss(
         self,
@@ -190,12 +174,14 @@ class MPMBase(pl.LightningModule):
 
     def masked_cst_loss(
         self,
-        _csts: T.Tensor,
-        _null_mask: T.BoolTensor,
-        _decoder_outs: T.Tensor,
+        normed_csts: T.Tensor,
+        csts_id: T.Tensor,
+        null_mask: T.BoolTensor,
+        decoder_outs: T.Tensor,
     ) -> T.Tensor:
-        """Calculate the particle loss used to train the encoder This is what must be
-        implemented in the sub-classes!!!!.
+        """Calculate the particle loss used to train the encoder.
+
+        This is what must be implemented in the sub-classes!!!!.
         """
         return T.tensor(0.0, device=self.device)
 
@@ -242,7 +228,7 @@ class MPMBase(pl.LightningModule):
         self, encoder_outputs: T.Tensor, encoder_mask: T.BoolTensor, labels: T.Tensor
     ) -> tuple:
         """Run the linear classifier using the encoder outputs."""
-        class_out = self.classifier_head(encoder_outputs, kv_mask=encoder_mask)
+        class_out = self.classifier_head(encoder_outputs, mask=encoder_mask)
         loss = cross_entropy(class_out, labels)
         self.acc(class_out, labels)  # Updates internal state
         return loss
@@ -255,7 +241,7 @@ class MPMBase(pl.LightningModule):
     ) -> T.Tensor:
         """Full forward pass for inference."""
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
-        x = self.encoder(x, kv_mask=mask)
+        x = self.encoder(x, mask=mask)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
 

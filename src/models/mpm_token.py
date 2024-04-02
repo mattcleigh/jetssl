@@ -23,12 +23,13 @@ class MPMToken(MPMBase):
 
     def masked_cst_loss(
         self,
-        csts: T.Tensor,
+        normed_csts: T.Tensor,
+        csts_id: T.Tensor,
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the loss using the labeller."""
-        labels = self.labeller(csts[null_mask]).long()
+        labels = self.labeller(normed_csts[null_mask]).long()
         preds = self.csts_head(decoder_outs[null_mask])
         return cross_entropy(preds, labels, label_smoothing=0.1)
 
@@ -40,7 +41,7 @@ class MPMToken(MPMBase):
         samples = self.labeller.idx_to_code(idxes)
         return self.normaliser.reverse(samples)
 
-    def on_fit_start(self):
+    def on_fit_start(self) -> None:
         """At the start of the fit fill in the normaliser and labeller.
 
         Only use 30 batches but this will be sufficient to get a good fit.

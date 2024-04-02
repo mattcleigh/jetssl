@@ -17,13 +17,21 @@ class MPMFlow(MPMBase):
     @T.autocast("cpu", enabled=False)
     def masked_cst_loss(
         self,
-        csts: T.Tensor,
+        normed_csts: T.Tensor,
+        csts_id: T.Tensor,
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the loss under the flow."""
+
+        # The flow can't handle discrete targets
+        # So we need to add noise to the csts features
+        # This is a hack because it is hardcoded but works for now
+        neutral_mask = null_mask & ((csts_id == 0) | (csts_id == 2))
+        normed_csts[neutral_mask] = T.randn_like(normed_csts[neutral_mask]) * 0.1
+
         return self.flow.forward_kld(
-            csts[null_mask].float(),
+            normed_csts[null_mask].float(),
             context=self.csts_head(decoder_outs[null_mask]).float(),
         )
 
