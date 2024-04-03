@@ -1,0 +1,24 @@
+build_docker: &build_docker
+  stage: build
+  needs: []
+  # The kaniko debug image is recommended because it has a shell, and a shell is required for an image to be used with GitLab CI/CD.
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  variables:
+    IMAGE_DESTINATION: $CI_REGISTRY_IMAGE:latest
+  script:   # Build and push the image
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/Dockerfile --destination $IMAGE_DESTINATION --cache=true
+    - echo "Image pushed successfully to ${IMAGE_DESTINATION}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# For building the image used for testing
+# The tmp suffix is picked up by gitlabs cleanup policy
+build_docker_test:
+  <<: *build_docker
+  variables:
+    IMAGE_DESTINATION: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-tmp
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

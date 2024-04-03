@@ -5,10 +5,15 @@ defaults:
   - override /model: jetclassifier.yaml
   - override /callbacks: finetune.yaml
 
+# Faster warmup
+model:
+  scheduler:
+    warmup_steps: 5000
+
 # Dont train for too long
 trainer:
   max_epochs: null
-  max_steps: 100000
+  max_steps: 50_000
 
 # Key parameters for fine-tuning
 n_jets: 10000 # Number of jets per class
@@ -23,7 +28,7 @@ datamodule:
     n_files: 1
   loader_config:
     batch_size: 500 # Smaller because some setups have 1000 jets
-    num_workers: 1 # Tiny datasets will break with more workers
+    num_workers: 2
 
 # For faster training
 precision: medium

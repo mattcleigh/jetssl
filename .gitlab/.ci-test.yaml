@@ -1,0 +1,22 @@
+variables:
+  TEST_CMD: coverage run -p --source mltools -m pytest --show-capture=stdout
+
+
+.test-template: &test-template
+  stage: tests
+  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-tmp
+  artifacts:
+    paths: [.coverage*]
+  rules:
+    - changes: ["pyproject.toml", "requirements.txt", "mltools/**/*.py", "**/*.yaml"]
+
+unit-tests:
+  <<: *test-template
+  script:
+    - $TEST_CMD tests/test_cnns.py
+    - $TEST_CMD tests/test_flows.py
+    - $TEST_CMD tests/test_loss.py
+    - $TEST_CMD tests/test_mlp.py
+    - $TEST_CMD tests/test_modules.py
+    - $TEST_CMD tests/test_optimisers.py
+    - $TEST_CMD tests/test_transformers.py

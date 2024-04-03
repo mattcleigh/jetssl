@@ -14,8 +14,8 @@ user**/**
 *.snakemake
 *.pytest
 
-# Just do all hidden files (bite me future me... or sam)
-.*/
+# Anything with cache in the name, pytest, ruff, or wandb...
+*cache*
 
 # File types
 launch.json

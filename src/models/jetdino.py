@@ -1,4 +1,3 @@
-import random
 from copy import deepcopy
 from functools import partial
 
@@ -10,6 +9,7 @@ from torch.nn.functional import (
     log_softmax,
     normalize,
     pairwise_distance,
+    softmax,
 )
 from torchmetrics import Accuracy
 
@@ -24,32 +24,52 @@ from src.models.utils import MLP, JetBackbone
 CSTS_ID = 8
 
 
-class DINOv2Loss(nn.Module):
-    """DINOv2 loss with sinkhorn-knopp centering."""
+# class DINOv2Loss(nn.Module):
+#     """DINOv2 loss with sinkhorn-knopp centering."""
 
-    def __init__(self, s_temp: float = 0.1, t_temp: float = 0.05) -> None:
-        super().__init__()
-        self.s_temp = s_temp
-        self.t_temp = t_temp
+#     def __init__(self, s_temp: float = 0.1, t_temp: float = 0.05) -> None:
+#         super().__init__()
+#         self.s_temp = s_temp
+#         self.t_temp = t_temp
 
-    def center_teacher_outputs(self, t_out: T.Tensor) -> T.Tensor:
-        """Apply sinkhorn-Knopp centering to the teacher outputs."""
-        Q = T.exp(t_out.float() / self.t_temp).t()
-        B = Q.shape[1]  # number of samples to assign
-        K = Q.shape[0]  # how many prototypes
-        Q /= Q.sum()
-        for _ in range(3):
-            Q /= Q.sum(dim=1, keepdim=True)
-            Q /= K
-            Q /= Q.sum(dim=0, keepdim=True)
-            Q /= B
-        Q *= B
-        return Q.t()
+#     def center_teacher_outputs(self, t_out: T.Tensor) -> T.Tensor:
+#         """Apply sinkhorn-Knopp centering to the teacher outputs."""
+#         Q = T.exp(t_out.float() / self.t_temp).t()
+#         B = Q.shape[1]  # number of samples to assign
+#         K = Q.shape[0]  # how many prototypes
+#         Q /= Q.sum()
+#         for _ in range(3):
+#             Q /= Q.sum(dim=1, keepdim=True)
+#             Q /= K
+#             Q /= Q.sum(dim=0, keepdim=True)
+#             Q /= B
+#         Q *= B
+#         return Q.t()
 
-    def forward(self, s_out: T.Tensor, t_centered: T.Tensor) -> T.Tensor:
-        """Calculate the loss given the pre-computed teacher centers."""
-        s_lsm = log_softmax(s_out / self.s_temp, dim=-1)
-        return -(t_centered * s_lsm).sum(dim=-1).mean()
+#     def forward(self, s_out: T.Tensor, t_centered: T.Tensor) -> T.Tensor:
+#         """Calculate the loss given the pre-computed teacher centers."""
+#         s_lsm = log_softmax(s_out / self.s_temp, dim=-1)
+#         return -(t_centered * s_lsm).sum(dim=-1).mean()
+
+
+def dino_loss(
+    s_out: T.Tensor,
+    t_out: T.Tensor,
+    s_temp: float = 0.1,
+    t_temp: float = 0.05,
+    center: float | T.Tensor = 0,
+) -> T.Tensor:
+    """Calculate the loss used in DINO-v1 including centering and sharpening."""
+    t_out = t_out.detach() - center
+    s_out = log_softmax(s_out / s_temp, dim=-1)
+    t_out = softmax(t_out / t_temp, dim=-1)
+    return -(t_out * s_out).sum(dim=-1).mean()
+
+
+def mean_entropy(x: T.Tensor, temp: float = 0.1) -> T.Tensor:
+    """The average entropy of a batch of logits."""
+    marginal = softmax(x / temp, dim=-1).mean(dim=0)
+    return (marginal ** (-marginal)).log().sum()
 
 
 @T.autocast("cuda", enabled=False)
@@ -86,8 +106,7 @@ class JetDINO(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
-        t_ema: float = 0.995,
-        reg_strenth: float = 0.1,
+        t_ema: float = 0.998,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -132,8 +151,6 @@ class JetDINO(pl.LightningModule):
 
         # Dino parameters
         self.t_ema = t_ema
-        self.reg_strenth = reg_strenth
-        self.dino_loss = DINOv2Loss()
 
         # Basic classifier and accuracy for evaluating encoder
         self.classifier_head = class_head(inpt_dim=self.encoder.dim, outp_dim=n_classes)
@@ -162,28 +179,36 @@ class JetDINO(pl.LightningModule):
         with set_eval(self), T.no_grad():
             cls_t, x_t = self.pass_teacher(normed_csts, csts_id, mask)
 
-        # Get the koleo loss
-        loss_reg = koleo_loss(cls_s1) + koleo_loss(cls_s2)
-        loss_reg += koleo_loss(x_s1[mask]) + koleo_loss(x_s2[mask])
-
         # Get the dino losses for the class tokens using both student views
-        t = self.dino_loss.center_teacher_outputs(cls_t)
-        loss_dino = self.dino_loss(cls_s1, t) + self.dino_loss(cls_s2, t)
+        loss_dino = dino_loss(cls_s1, cls_t)
+        loss_dino += dino_loss(cls_s2, cls_t)
 
-        # Get the ibot losses for the constituent tokens a 5th of the time
-        if random.random() < 0.2:
-            t = self.dino_loss.center_teacher_outputs(x_t[mask])
-            loss_ibot = self.dino_loss(x_s1[mask], t) + self.dino_loss(x_s2[mask], t)
-        else:
-            loss_ibot = T.tensor(0.0, device=self.device)
+        # Get the ibot losses for the constituent using both student views
+        loss_ibot = dino_loss(x_s1[mask], x_t[mask])
+        loss_ibot += dino_loss(x_s2[mask], x_t[mask])
 
-        # Combine the losses
-        total_loss = loss_dino + loss_ibot + self.reg_strenth * loss_reg
+        # Get the regularisation loss (we want to maximise the entropy)
+        reg_cls = -mean_entropy(cls_s1)
+        reg_cls += -mean_entropy(cls_s2)
+        reg_csts = -mean_entropy(x_s1[mask])
+        reg_csts += -mean_entropy(x_s2[mask])
 
         # Do an intervention for the loss sometimes being NaN
-        if T.isnan(total_loss).any():
-            print("Intervention!")
-            total_loss = T.nan_to_num(total_loss)
+        if T.isnan(loss_dino):
+            loss_dino = T.zeros(1, device=self.device)
+            print("Intervention: loss_dino was NaN")
+        if T.isnan(loss_ibot):
+            loss_ibot = T.zeros(1, device=self.device)
+            print("Intervention: loss_ibot was NaN")
+        if T.isnan(reg_cls):
+            reg_cls = T.zeros(1, device=self.device)
+            print("Intervention: reg_cls was NaN")
+        if T.isnan(reg_csts):
+            reg_csts = T.zeros(1, device=self.device)
+            print("Intervention: reg_csts was NaN")
+
+        # Combine the losses
+        total_loss = loss_dino + loss_ibot + reg_cls + reg_csts
 
         # Perform the ema updates (training only)
         if self.training:
@@ -205,7 +230,8 @@ class JetDINO(pl.LightningModule):
         self.log(f"{prefix}/total_loss", total_loss)
         self.log(f"{prefix}/dino_loss", loss_dino)
         self.log(f"{prefix}/ibot_loss", loss_ibot)
-        self.log(f"{prefix}/reg_loss", loss_reg)
+        self.log(f"{prefix}/reg_loss", reg_cls)
+        self.log(f"{prefix}/reg_loss", reg_csts)
         return total_loss
 
     def mask_and_encode(

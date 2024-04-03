@@ -41,23 +41,24 @@ def get_args():
 def main() -> None:
     """Convert the Shlomi root files to a more usable HDF format.
 
-    The output features are the following (has to overlap with JetClass!!!)
-    - 0: part_pt
-    - 1: part_deta
-    - 2: part_dphi
-    - 3: part_d0val
-    - 4: part_d0err
-    - 5: part_dzval
-    - 6: part_dzerr
+    The output features are the following:
+    Independant continuous (7 dimensional vector)
+    - 0: pt
+    - 1: deta
+    - 2: dphi
+    - 3: d0val
+    - 4: d0err
+    - 5: dzval
+    - 6: dzerr
     Independant categorical (single int representing following classes)
-    - 0: part_isPhoton
-    - 1: part_isHadron_Neg
-    - 2: part_isHadron_Neutral
-    - 3: part_isHadron_Pos
-    - 4: part_isElectron_Neg
-    - 5: part_isElectron_Pos
-    - 6: part_isMuon_Neg
-    - 7: part_isMuon_Pos
+    - 0: isPhoton
+    - 1: isHadron_Neg
+    - 2: isHadron_Neutral
+    - 3: isHadron_Pos
+    - 4: isElectron_Neg
+    - 5: isElectron_Pos
+    - 6: isMuon_Neg
+    - 7: isMuon_Pos
     """
     # Get the arguments
     args = get_args()
