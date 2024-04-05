@@ -2,13 +2,6 @@ verbose: false
 printshellcmds: true
 jobs: 200 # Maximum number of jobs to run in parallel
 
-sdm: apptainer
-apptainer-args: >- # multi-line string
-  --nv
-  --cleanenv
-  --env PYTHONPATH=.
-  --env WANDB_API_KEY=$WANDB_API_KEY
-  --bind /srv,/home
 executor: slurm
 default-resources:
   slurm_account: golling
@@ -16,3 +9,10 @@ default-resources:
   runtime: 60 # minutes
   mem_mb: 4000
   threads: 6
+sdm: apptainer
+apptainer-args: >- # multi-line string
+  --nv
+  --bind /srv,/home
+# --cleanenv
+# --env PYTHONPATH=.
+# --env WANDB_API_KEY=$WANDB_API_KEY

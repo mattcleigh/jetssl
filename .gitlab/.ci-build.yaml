@@ -12,13 +12,3 @@ build_docker: &build_docker
     - echo "Image pushed successfully to ${IMAGE_DESTINATION}"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-# For building the image used for testing
-# The tmp suffix is picked up by gitlabs cleanup policy
-build_docker_test:
-  <<: *build_docker
-  variables:
-    IMAGE_DESTINATION: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-tmp
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

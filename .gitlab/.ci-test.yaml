@@ -4,11 +4,11 @@ variables:
 
 .test-template: &test-template
   stage: tests
-  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-tmp
+  image: $CI_REGISTRY_IMAGE:latest
   artifacts:
     paths: [.coverage*]
   rules:
-    - changes: ["pyproject.toml", "requirements.txt", "mltools/**/*.py", "**/*.yaml"]
+    - changes: ["pyproject.toml", "requirements.txt", "jetssl/**/*.py", "**/*.yaml"]
 
 unit-tests:
   <<: *test-template
