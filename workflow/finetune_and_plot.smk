@@ -32,13 +32,13 @@ model_names = ["diff"] #, "dino", "flow", "onlyid", "reg", "token", "untrained"]
 # Define the finetuning tasks
 downstream_tasks = {
     "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    # "shlomi": ["experiment=train_cwola"],
+    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
     # "cwola": ["experiment=train_jetvertex", "datamodule=shlomi"],
     # "vtx": ["experiment=train_jetvertex", "datamodule=shlomi"],
 }
 
 # The number of jets to use per downstream task (per process)
-n_jets = [1e5] #, 1e4, 1e5]
+n_jets = [1e3] #, 1e4, 1e5, 1e6]
 
 ########################################
 
@@ -126,11 +126,11 @@ for dt in dt_names:
                     f"n_jets={nj}",
                     dt_args[dt],
                 threads: 8
-                # resources:
-                    # slurm_partition="shared-gpu,private-dpnc-gpu",
-                    # runtime=3 * 60,  # minutes
-                    # slurm_extra="--gres=gpu:ampere:1",
-                    # mem_mb=20000,
+                resources:
+                    slurm_partition="shared-gpu,private-dpnc-gpu",
+                    runtime=3 * 60,  # minutes
+                    slurm_extra="--gres=gpu:ampere:1",
+                    mem_mb=20000,
                 wrapper:
                     "file:hydra_cli"
 

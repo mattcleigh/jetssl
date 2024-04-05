@@ -1,7 +1,6 @@
 variables:
   TEST_CMD: coverage run -p --source mltools -m pytest --show-capture=stdout
 
-
 .test-template: &test-template
   stage: tests
   image: $CI_REGISTRY_IMAGE:latest

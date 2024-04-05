@@ -16,16 +16,16 @@ trainer:
   max_steps: 50_000
 
 # Key parameters for fine-tuning
-n_jets: 1000000 # Number of jets per class
+n_jets: 1000_0000
 
 # Never finetune on the full dataset, always 1 file and n_jets
 datamodule:
   train_set:
     n_files: 1
-    n_jets: ${n_jets}
+    n_jets: ${int_div:n_jets,10}
   val_set:
     n_files: 1
-    n_jets: ${n_jets}
+    n_jets: ${int_div:n_jets,10}
   test_set:
     n_files: 1
   loader_config:
