@@ -8,7 +8,7 @@ hydra:
   run:
     dir: .
 
-path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetuning/
+path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune/
 plot_dir: plots/
 outfile: test
 

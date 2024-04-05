@@ -29,5 +29,5 @@ datamodule:
     num_signal: ${num_signal}
 
 # Bookkeeping
-project_name: jetssl_finetuning
+project_name: jetssl_finetune
 network_name: cwola_classifier_${num_signal}

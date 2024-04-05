@@ -72,6 +72,9 @@ class MPMBase(pl.LightningModule):
         self.classifier_head = class_head(inpt_dim=self.encoder.dim, outp_dim=n_classes)
         self.acc = Accuracy("multiclass", num_classes=n_classes)
 
+        # Test the save epoch end callback which saves an untrained backbone
+        self.on_train_epoch_end()
+
     def _shared_step(self, sample: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
         # Unpack the sample

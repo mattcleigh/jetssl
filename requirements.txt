@@ -28,9 +28,6 @@ vector
 lz4
 xxhash
 
-# workflow
-snakemake==8.4.1 # Newer seems bugged with apptainer
-
 # hydra
 omegaconf
 hydra-core

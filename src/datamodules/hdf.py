@@ -60,6 +60,7 @@ class JetHDFBase:
         n_files: int | list | None = None,
         n_jets: int | list | None = None,
         transforms: Callable = identity,
+        n_jets_total: int | None = None,
     ) -> None:
         """Parameters
         ----------
@@ -81,6 +82,9 @@ class JetHDFBase:
             If not provided, all jets are used from each file.
         transforms : partial
             A callable function to apply during the getitem method
+        n_jets_total : int or None, optional
+            The total number of jets in the dataset.
+            If not provided, it is calculated from the files and the n_jets.
         """
         # Processes and the number of jets must be a list for generality
         if isinstance(processes, str):
@@ -88,6 +92,8 @@ class JetHDFBase:
                 processes = list(JC_CLASS_TO_LABEL.keys())
             else:
                 processes = [processes]
+        if n_jets_total is not None:
+            n_jets = n_jets_total // len(processes)
         if isinstance(n_jets, int) or n_jets is None:
             n_jets = [n_jets] * len(processes)
 

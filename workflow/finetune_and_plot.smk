@@ -27,12 +27,12 @@ proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 
 # Define the model backbones to finetune
-model_names = ["diff"] #, "dino", "flow", "onlyid", "reg", "token", "untrained"]
+model_names = ["diff", "dino", "flow", "onlyid", "reg", "token", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {
     "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
     # "cwola": ["experiment=train_jetvertex", "datamodule=shlomi"],
     # "vtx": ["experiment=train_jetvertex", "datamodule=shlomi"],
 }

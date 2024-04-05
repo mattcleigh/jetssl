@@ -22,10 +22,10 @@ n_jets: 1000_0000
 datamodule:
   train_set:
     n_files: 1
-    n_jets: ${int_div:n_jets,10}
+    n_jets_total: ${n_jets}
   val_set:
     n_files: 1
-    n_jets: ${int_div:n_jets,10}
+    n_jets_total: ${n_jets}
   test_set:
     n_files: 1
   loader_config:
@@ -33,5 +33,5 @@ datamodule:
     num_workers: 2
 
 # Bookkeeping
-project_name: jetssl_finetuning
+project_name: jetssl_finetune
 network_name: classifier_${n_jets}

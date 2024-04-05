@@ -5,6 +5,6 @@ defaults:
   - paths: default.yaml
   - _self_
 
-project_name: jetssl_finetuning
+project_name: jetssl_finetune
 network_name: classifier_1000000
 ckpt_flag: best.ckpt
