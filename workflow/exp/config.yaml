@@ -13,6 +13,6 @@ sdm: apptainer
 apptainer-args: >- # multi-line string
   --nv
   --bind /srv,/home
-# --cleanenv
-# --env PYTHONPATH=.
-# --env WANDB_API_KEY=$WANDB_API_KEY
+  --cleanenv
+  --env PYTHONPATH=.
+  --env WANDB_API_KEY=$WANDB_API_KEY
