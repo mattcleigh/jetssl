@@ -1,29 +1,38 @@
 # pytorch / deep learning
 torch
-lightning
+torchdiffeq
 torchmetrics
+lightning
 wandb
 normflows
+onnx
+onnxruntime
 
-# Flash attention 2
+# flash attention 2
 packaging
 ninja
 flash-attn
 
-# General data handling
+# general data handling
+pandas
+tables
+h5py
 pyarrow
 parquet
 fastparquet
 
-# Needed for opening the jetclass data files
+# CERN/ROOT for jetclass
+awkward
 uproot
+vector
 lz4
 xxhash
 
-# diffusion stuff
-k-diffusion
+# workflow
+snakemake==8.4.1 # Newer seems bugged with apptainer
 
 # hydra
+omegaconf
 hydra-core
 hydra-colorlog
 
@@ -31,18 +40,17 @@ hydra-colorlog
 matplotlib
 seaborn
 plotly
+Pillow
 
 # data science
 numpy
 scipy
-scikit-learn
 scikit-hep
-pandas
-tables
-h5py
+scikit-learn
 pykeops
 
 # other
+tqdm
 black
 pylint
 dotmap
