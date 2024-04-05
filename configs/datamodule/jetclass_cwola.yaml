@@ -1,7 +1,7 @@
 defaults:
-  - shlomi_base/mappable@train_set
-  - shlomi_base/mappable@val_set
-  - shlomi_base/mappable@test_set
+  - jetclass_base/cwola@train_set # We use mappable datasets
+  - jetclass_base/cwola@val_set
+  - jetclass_base/cwola@test_set
   - jet_transforms/standard@train_set.transforms
   - jet_transforms/standard@val_set.transforms
   - jet_transforms/standard@test_set.transforms
@@ -9,16 +9,16 @@ defaults:
 _target_: src.datamodules.hdf.JetDataModule
 
 train_set:
-  processes: training
+  path: ${paths.data_dir}/JetClassH5/train_100M/
 
 val_set:
-  processes: valid
+  path: ${paths.data_dir}/JetClassH5/val_5M/
 
 test_set:
-  processes: test
+  path: ${paths.data_dir}/JetClassH5/test_20M/
 
 loader_config:
-  batch_size: 512
+  batch_size: 500
   num_workers: 2
   drop_last: true
   shuffle: true

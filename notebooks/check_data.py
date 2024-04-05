@@ -14,7 +14,6 @@ from src.datamodules.masking import random_masking
 from src.datamodules.transforms import (
     apply_masking,
     compose,
-    jitter_neutral_impact,
     log_squash_csts_pt,
     tanh_d0_dz,
 )
@@ -32,7 +31,6 @@ features = [
 pipeline = partial(
     compose,
     transforms=[
-        jitter_neutral_impact,
         log_squash_csts_pt,
         tanh_d0_dz,
         partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5)),

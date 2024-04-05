@@ -1,2 +1,2 @@
-workdir: /home/users/l/leighm/DiffBEIT/
-container_path: /home/users/l/leighm/scratch/Images/diffbeit-image_latest.sif
+workdir: /home/users/l/leighm/jetssl/
+container_path: /srv/fast/share/rodem/images/diffbeit-image_latest.sif

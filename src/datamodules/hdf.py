@@ -138,6 +138,54 @@ class JetMappable(Dataset, JetHDFBase):
         return self.transforms(sample_dict)
 
 
+class JetCWola(Dataset):
+    """A mappable dataset that loads signal and background jets and mixes the labels."""
+
+    def __init__(
+        self,
+        num_signal: int = 1000_000,
+        num_background: int = 10_000,
+        signal_process: str = "TTBar",
+        background_process: str = "ZJetsToNuNu",
+        **kwargs,
+    ) -> None:
+        # Needed for the model init
+        self.n_classes = 2
+
+        # Load the signal and background datasets
+        self.signal = JetMappable(
+            n_classes=1,
+            processes=signal_process,
+            n_files=10,
+            n_jets=num_signal // 10,
+            **kwargs,
+        )
+        self.background = JetMappable(
+            n_classes=0,
+            processes=background_process,
+            n_files=10,
+            n_jets=num_background // 10,
+            **kwargs,
+        )
+
+    def __len__(self) -> int:
+        return len(self.signal) + len(self.background)
+
+    def __getitem__(self, idx: int) -> tuple:
+        """Retrieves an item and applies the pre-processing function."""
+        # Take from signal first
+        if idx < len(self.signal):
+            sample = self.signal[idx]
+            sample["cwola_labels"] = 1
+            sample["labels"] = 1
+        # Otherwise take from background which label is split in two
+        else:
+            sample = self.background[idx - len(self.signal)]
+            sample["cwola_labels"] = idx % 2
+            sample["labels"] = 0
+        return sample
+
+
 class JetMappablePartial(Dataset, JetHDFBase):
     """A pytorch mappable dataset that each epoch will load a portion of the jets.
 

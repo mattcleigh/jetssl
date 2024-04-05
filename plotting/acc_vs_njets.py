@@ -18,14 +18,14 @@ import matplotlib.pyplot as plt
 )
 def main(cfg: DictConfig):
     # Load the list of models
-    model_list = [v for k, v in cfg.models.items()]
+    model_list = list(cfg.models.values())
 
     # Create the figure
     fig, ax = plt.subplots(figsize=(5, 5))
 
     # For each model find all variants
     for model in model_list:
-        # Variants have a different number of samples
+        # Seach in the directory for everything matching the model name
         model_variants = list(Path(cfg.path).glob(model + "*"))
         n_samples = [int(m.name.split("_")[-1]) for m in model_variants]
 

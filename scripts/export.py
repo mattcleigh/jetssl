@@ -1,14 +1,13 @@
-import rootutils
-
-root = rootutils.setup_root(search_from=__file__, pythonpath=True)
-
 import logging
 from pathlib import Path
 
 import h5py
 import hydra
+import rootutils
 import torch as T
 from omegaconf import DictConfig
+
+root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 from mltools.mltools.hydra_utils import reload_original_config
 from mltools.mltools.torch_utils import to_np
@@ -21,7 +20,7 @@ log = logging.getLogger(__name__)
 )
 def main(cfg: DictConfig) -> None:
     log.info("Loading run information")
-    orig_cfg = reload_original_config(ckpt_flag="*best*" if cfg.get_best else "*last*")
+    orig_cfg = reload_original_config(ckpt_flag=cfg.ckpt_flag)
 
     log.info("Loading best checkpoint")
     model_class = hydra.utils.get_class(orig_cfg.model._target_)

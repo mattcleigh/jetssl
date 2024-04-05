@@ -5,7 +5,6 @@ defaults:
   - paths: default.yaml
   - _self_
 
-get_best: True
-
-project_name: jetbert
-network_name: finetuned_flow_class_100000
+project_name: jetssl_finetuning
+network_name: classifier_1000000
+ckpt_flag: best.ckpt

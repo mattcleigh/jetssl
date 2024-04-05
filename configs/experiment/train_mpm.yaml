@@ -5,15 +5,11 @@ defaults:
   - override /datamodule: jetclass_masked
   - override /model: mpmflow # jetdino, mpmflow, mpmreg, mpmtoken, mpmdiff, mpmonlyid
 
-# For faster training
-precision: medium
-compile: null
-
 # Allows us to use the partially mappable datasets
 trainer:
   max_epochs: 9999999999999
-  reload_dataloaders_every_n_epochs: 3
-  check_val_every_n_epoch: 1
+  reload_dataloaders_every_n_epochs: 5
+  check_val_every_n_epoch: 5
 
 # Model modifications
 project_name: jetssl

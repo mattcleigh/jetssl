@@ -8,15 +8,9 @@ hydra:
   run:
     dir: .
 
-path: /srv/beegfs/scratch/groups/rodem/flowbert/single_epoch_pretrain
-plot_dir: /home/users/l/leighm/DiffBEIT/plots
-outfile: jetclass
+path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetuning/
+plot_dir: plots/
+outfile: test
 
 models:
-  a: finetune_flow_10
-  b: finetune_flow_6
-  c: finetune_kmeans_256
-  d: finetune_kmeans_512
-  e: finetune_kmeans_768
-  f: finetune_clr
-  g: reinit_kmeans_768
+  a: classifier

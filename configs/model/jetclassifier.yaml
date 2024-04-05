@@ -1,7 +1,6 @@
 _target_: src.models.classifier.Classifier
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl/reg/backbone.pkl
-reinstantiate: False
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl/backbones/untrained.pkl
 
 defaults:
   - _self_

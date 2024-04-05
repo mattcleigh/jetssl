@@ -37,7 +37,7 @@ class MPMFlow(MPMBase):
                 normed_csts[null_mask].float(),
                 context=self.csts_head(decoder_outs[null_mask]).float(),
             )
-            / 5
+            / 3
         )  # Arbitrary scaling factor
 
     def sample_csts(self, decoder_outs: T.Tensor) -> T.Tensor:

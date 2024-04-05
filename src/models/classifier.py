@@ -7,7 +7,6 @@ from torch.nn.functional import cross_entropy
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import reset_params
 
 if TYPE_CHECKING:
     from src.models.utils import JetBackbone
@@ -28,17 +27,12 @@ class Classifier(LightningModule):
         class_head: partial,
         optimizer: partial,
         scheduler: dict,
-        reinstantiate: bool = False,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
 
         # Load the pretrained and pickled JetBackbone object.
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
-
-        # Reset all the layer parameters
-        if reinstantiate:
-            self.backbone.apply(reset_params)
 
         # Create the head for the downstream task
         self.class_head = class_head(
@@ -47,8 +41,7 @@ class Classifier(LightningModule):
         )
 
         # Loss and metrics
-        task = "multiclass" if n_classes > 0 else "binary"
-        self.acc = Accuracy(task, num_classes=n_classes)
+        self.acc = Accuracy("multiclass", num_classes=n_classes)
 
     def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor) -> tuple:
         x, mask = self.backbone(csts, csts_id, mask)
@@ -85,3 +78,27 @@ class Classifier(LightningModule):
 
     def configure_optimizers(self) -> dict:
         return simple_optim_sched(self)
+
+
+class CWoLaClassifier(Classifier):
+    """Extra classifier for the CWoLa task."""
+
+    def _shared_step(self, sample: tuple, prefix: str) -> T.Tensor:
+        """Shared step used in both training and validaiton."""
+        # Unpack the sample
+        csts = sample["csts"]
+        csts_id = sample["csts_id"]
+        labels = sample["labels"]
+        mask = sample["mask"]
+        cwola_labels = sample["cwola_labels"]
+
+        # Train on cwola labels but evaluate on the true labels
+        output = self.forward(csts, csts_id, mask)
+        loss = cross_entropy(output, cwola_labels)  # No smoothing for CWoLa
+        acc = self.acc(output, labels)
+
+        # Log the loss and accuracy
+        self.log(f"{prefix}/total_loss", loss)
+        self.log(f"{prefix}/acc", acc)
+
+        return loss

@@ -10,6 +10,8 @@ from omegaconf import DictConfig
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
+import sys
+
 from mltools.mltools.hydra_utils import (
     instantiate_collection,
     log_hyperparameters,
@@ -28,6 +30,7 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     """Main training script."""
     log.info("Setting up full job config")
+    sys.exit()
     if cfg.full_resume:
         old_cfg = reload_original_config(ckpt_flag=cfg.ckpt_flag)
         if old_cfg is not None:

@@ -2,8 +2,8 @@ verbose: false
 printshellcmds: true
 jobs: 200 # Maximum number of jobs to run in parallel
 
-use-singularity: true
-singularity-args: >- # multi-line string
+sdm: apptainer
+apptainer-args: >- # multi-line string
   --nv
   --cleanenv
   --env PYTHONPATH=.
