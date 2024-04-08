@@ -46,7 +46,7 @@ def main(cfg: DictConfig):
             acc.append((labels == pred).mean())
 
         # Plot the accuracies
-        n_samples = np.array(n_samples) * 10
+        n_samples = np.array(n_samples)
         ax.plot(n_samples, acc, "-o", label=model)
 
     # Tidy up

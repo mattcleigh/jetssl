@@ -33,12 +33,12 @@ model_names = ["diff", "dino", "flow", "onlyid", "reg", "token", "untrained"]
 downstream_tasks = {
     "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
     "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
-    # "cwola": ["experiment=train_jetvertex", "datamodule=shlomi"],
+    # "cwola": ["experiment=train_cwola", "datamodule=shlomi"],
     # "vtx": ["experiment=train_jetvertex", "datamodule=shlomi"],
 }
 
 # The number of jets to use per downstream task (per process)
-n_jets = [1e3] #, 1e4, 1e5, 1e6]
+n_jets = [1e4, 1e5, 1e6, 1e7]
 
 ########################################
 
@@ -68,7 +68,7 @@ for dt in dt_names:
             f"{plot_dir}{dt}.pdf",
         params:
             "plotting/acc_vs_njets.py",
-            f"outfile={dt}.pdf",
+            f"outfile={dt}",
             *(f"+models.{m}={dt}_{m}" for m in model_names), # Will search for the njets automatically
             f"plot_dir={plot_dir}",
             f"path={proj}",
@@ -104,8 +104,9 @@ for dt in dt_names:
                 threads: 8
                 resources:
                     slurm_partition="shared-gpu,private-dpnc-gpu",
-                    slurm_extra="--gres=gpu:1",
                     runtime=60,  # minutes
+                    slurm_extra="--gres=gpu:ampere:1",
+                    mem_mb=20000,
                 wrapper:
                     "file:hydra_cli"
 

@@ -3,12 +3,12 @@
 import logging
 
 import hydra
-import pyrootutils
 import pytorch_lightning as pl
+import rootutils
 import torch as T
 from omegaconf import DictConfig
 
-root = pyrootutils.setup_root(search_from=__file__, pythonpath=True)
+root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 
 from mltools.mltools.hydra_utils import (

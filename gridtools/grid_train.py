@@ -11,7 +11,7 @@ def main() -> None:
         job_name="pretraining",
         work_dir=root / "scripts",
         log_dir=root / "logs",
-        image_path="/srv/fast/share/rodem/images/diffbeit-image_latest.sif",
+        image_path="/srv/fast/share/rodem/images/jetssl_latest.sif",
         command="python train.py",
         n_gpus=1,
         n_cpus=6,

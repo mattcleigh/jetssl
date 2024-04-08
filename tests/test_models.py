@@ -1,9 +1,6 @@
 from functools import partial
 
-import rootutils
 import torch as T
-
-root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 from mltools.mltools.lightning_utils import linear_warmup
 from mltools.mltools.transformers import ClassAttentionPooling
