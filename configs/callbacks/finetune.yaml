@@ -16,7 +16,7 @@ best_checkpoint:
 early_stopping:
   _target_: pytorch_lightning.callbacks.EarlyStopping
   monitor: valid/total_loss
-  patience: 10
+  patience: 30
   mode: min
 
 model_summary:

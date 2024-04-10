@@ -58,11 +58,11 @@ class Classifier(LightningModule):
         # Pass through the backbone and head
         output = self.forward(csts, csts_id, mask)
         loss = cross_entropy(output, labels, label_smoothing=0.1)
-        acc = self.acc(output, labels)
+        self.acc(output, labels)  # updates internal state
 
         # Log the loss and accuracy
         self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/acc", acc)
+        self.log(f"{prefix}/acc", self.acc)
 
         return loss
 
@@ -95,10 +95,12 @@ class CWoLaClassifier(Classifier):
         # Train on cwola labels but evaluate on the true labels
         output = self.forward(csts, csts_id, mask)
         loss = cross_entropy(output, cwola_labels)  # No smoothing for CWoLa
+        true_loss = cross_entropy(output, labels)
         acc = self.acc(output, labels)
 
         # Log the loss and accuracy
-        self.log(f"{prefix}/total_loss", loss)
+        self.log(f"{prefix}/total_loss", true_loss)  # Used for early stopping
+        self.log(f"{prefix}/cwola_loss", loss)
         self.log(f"{prefix}/acc", acc)
 
         return loss

@@ -31,14 +31,14 @@ model_names = ["diff", "dino", "flow", "onlyid", "reg", "token", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {
-    "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
+    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    "vtx": ["experiment=train_vertexer"],
     # "cwola": ["experiment=train_cwola", "datamodule=shlomi"],
-    # "vtx": ["experiment=train_jetvertex", "datamodule=shlomi"],
 }
 
 # The number of jets to use per downstream task (per process)
-n_jets = [1e4, 1e5, 1e6, 1e7]
+n_jets = [1e4, 5e4, 1e5, 5e5, 1e6]
 
 ########################################
 

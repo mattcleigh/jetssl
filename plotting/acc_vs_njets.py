@@ -33,7 +33,11 @@ def main(cfg: DictConfig):
         model_variants = [
             m for _, m in sorted(zip(n_samples, model_variants, strict=False))
         ]
-        n_samples = sorted(n_samples)
+        n_samples = np.array(sorted(n_samples))
+
+        # Clip at the shlomi dataset size
+        if "shlomi" in cfg.outfile:
+            n_samples = np.clip(n_samples, 1, 543544)
 
         # For each varaint load the accuracies
         acc = []
@@ -46,7 +50,6 @@ def main(cfg: DictConfig):
             acc.append((labels == pred).mean())
 
         # Plot the accuracies
-        n_samples = np.array(n_samples)
         ax.plot(n_samples, acc, "-o", label=model)
 
     # Tidy up

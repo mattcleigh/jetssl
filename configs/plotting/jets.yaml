@@ -13,4 +13,4 @@ plot_dir: plots/
 outfile: test
 
 models:
-  a: classifier
+  a: vertexer_600000
