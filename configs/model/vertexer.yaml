@@ -9,7 +9,6 @@ vertex_config:
   hddn_dim: 128
   norm: LayerNorm
 
-
 defaults:
   - _self_
   - optimizer: default.yaml

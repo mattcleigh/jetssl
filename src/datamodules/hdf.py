@@ -166,6 +166,7 @@ class JetCWola(Dataset):
             n_jets=num_signal // 10,
             **kwargs,
         )
+        self.n_signal = len(self.signal)
         self.background = JetMappable(
             n_classes=0,
             processes=background_process,
@@ -173,9 +174,10 @@ class JetCWola(Dataset):
             n_jets=num_background // 10,
             **kwargs,
         )
+        self.n_background = len(self.background)
 
     def __len__(self) -> int:
-        return len(self.signal) + len(self.background)
+        return self.n_background + self.n_signal
 
     def __getitem__(self, idx: int) -> tuple:
         """Retrieves an item and applies the pre-processing function."""
@@ -186,7 +188,7 @@ class JetCWola(Dataset):
             sample["labels"] = 1
         # Otherwise take from background which label is split in two
         else:
-            sample = self.background[idx - len(self.signal)]
+            sample = self.background[idx - self.n_signal]
             sample["cwola_labels"] = idx % 2
             sample["labels"] = 0
         return sample

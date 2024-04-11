@@ -27,12 +27,12 @@ proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 
 # Define the model backbones to finetune
-model_names = ["diff", "dino", "flow", "onlyid", "reg", "token", "untrained"]
+model_names = ["diff", "flow", "onlyid", "reg", "token", "untrained"] # dino
 
 # Define the finetuning tasks
 downstream_tasks = {
-    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
+    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
     "vtx": ["experiment=train_vertexer"],
     # "cwola": ["experiment=train_cwola", "datamodule=shlomi"],
 }
@@ -67,7 +67,7 @@ for dt in dt_names:
         output:
             f"{plot_dir}{dt}.pdf",
         params:
-            "plotting/acc_vs_njets.py",
+            "plotting/acc_vs_njets.py" if dt != "vtx" else "plotting/vtx_vs_njets.py",
             f"outfile={dt}",
             *(f"+models.{m}={dt}_{m}" for m in model_names), # Will search for the njets automatically
             f"plot_dir={plot_dir}",

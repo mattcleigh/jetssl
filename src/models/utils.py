@@ -61,6 +61,7 @@ class VectorDiffuser(nn.Module):
             **mlp_config,
         )
         self.ema_mlp = deepcopy(self.mlp)
+        self.ema_mlp.requires_grad_(False)
 
     def forward(
         self, xt: T.Tensor, t: T.Tensor, ctxt: T.Tensor, use_ema: bool = False
@@ -86,7 +87,7 @@ class VectorDiffuser(nn.Module):
 
         def ode_fn(t, xt):
             t = t * xt.new_ones([xt.shape[0], 1])
-            return self.forward(xt, t, ctxt, use_ema=True)
+            return self.forward(xt, t, ctxt, use_ema=False)
 
         return odeint(ode_fn, x1, times, method="midpoint")[-1]
 

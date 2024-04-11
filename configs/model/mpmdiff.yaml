@@ -1,6 +1,6 @@
 _target_: src.models.mpm_diff.MPMDiff
 
-embed_dim: 64
+embed_dim: 128
 
 diff_config:
   time_dim: 16

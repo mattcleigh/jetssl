@@ -1,4 +1,3 @@
-from copy import deepcopy
 from functools import partial
 
 import pytorch_lightning as pl
@@ -11,6 +10,8 @@ from torch.nn.functional import (
     pairwise_distance,
     softmax,
 )
+from torch.nn.init import trunc_normal_
+from torch.nn.utils.parametrizations import weight_norm
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
@@ -24,46 +25,63 @@ from src.models.utils import MLP, JetBackbone
 CSTS_ID = 8
 
 
-# class DINOv2Loss(nn.Module):
-#     """DINOv2 loss with sinkhorn-knopp centering."""
+class DINOv2Loss(nn.Module):
+    """DINOv2 loss with sinkhorn-knopp centering."""
 
-#     def __init__(self, s_temp: float = 0.1, t_temp: float = 0.05) -> None:
-#         super().__init__()
-#         self.s_temp = s_temp
-#         self.t_temp = t_temp
+    def __init__(
+        self,
+        dim=int,
+        s_temp: float = 0.1,
+        t_temp: float = 0.05,
+        momentum: float = 0.9,
+        centering_type: str = "swav",
+    ) -> None:
+        super().__init__()
+        self.s_temp = s_temp
+        self.t_temp = t_temp
+        self.momentum = momentum
+        self.centering_type = centering_type
+        self.register_buffer("t_center", T.zeros(1, dim))
 
-#     def center_teacher_outputs(self, t_out: T.Tensor) -> T.Tensor:
-#         """Apply sinkhorn-Knopp centering to the teacher outputs."""
-#         Q = T.exp(t_out.float() / self.t_temp).t()
-#         B = Q.shape[1]  # number of samples to assign
-#         K = Q.shape[0]  # how many prototypes
-#         Q /= Q.sum()
-#         for _ in range(3):
-#             Q /= Q.sum(dim=1, keepdim=True)
-#             Q /= K
-#             Q /= Q.sum(dim=0, keepdim=True)
-#             Q /= B
-#         Q *= B
-#         return Q.t()
+    @T.no_grad()
+    def swav_center(self, t_out: T.Tensor) -> T.Tensor:
+        """Apply sinkhorn-Knopp centering to the teacher outputs."""
+        Q = T.exp(t_out.float() / self.t_temp).t()
+        B = Q.shape[1]  # number of samples to assign
+        K = Q.shape[0]  # how many prototypes
+        Q /= Q.sum()
+        for _ in range(3):
+            Q /= Q.sum(dim=1, keepdim=True)
+            Q /= K
+            Q /= Q.sum(dim=0, keepdim=True)
+            Q /= B
+        Q *= B
+        return Q.t()
 
-#     def forward(self, s_out: T.Tensor, t_centered: T.Tensor) -> T.Tensor:
-#         """Calculate the loss given the pre-computed teacher centers."""
-#         s_lsm = log_softmax(s_out / self.s_temp, dim=-1)
-#         return -(t_centered * s_lsm).sum(dim=-1).mean()
+    @T.no_grad()
+    def momentum_center(self, t_out: T.Tensor) -> T.Tensor:
+        """Apply momentum centering to the teacher outputs."""
+        t_out = softmax((t_out - self.center) / self.t_temp, dim=-1)
+        if self.training:
+            self.t_center *= self.momentum
+            self.t_center += (1 - self.momentum) * t_out.mean(dim=0)
+        return t_out
 
+    def forward(self, s_out: T.Tensor, t_out: T.Tensor) -> T.Tensor:
+        """Calculate the loss given the pre-computed teacher centers."""
+        # Center the teacher outputs
+        if self.centering_type == "swav":
+            t_centered = self.swav_center(t_out)
+        elif self.centering_type == "momentum":
+            t_centered = self.momentum_center(t_out)
+        elif self.centering_type == "none":
+            t_centered = softmax(t_out / self.t_temp, dim=-1)
+        else:
+            raise ValueError(f"Unknown centering type: {self.centering_type}")
 
-def dino_loss(
-    s_out: T.Tensor,
-    t_out: T.Tensor,
-    s_temp: float = 0.1,
-    t_temp: float = 0.05,
-    center: float | T.Tensor = 0,
-) -> T.Tensor:
-    """Calculate the loss used in DINO-v1 including centering and sharpening."""
-    t_out = t_out.detach() - center
-    s_out = log_softmax(s_out / s_temp, dim=-1)
-    t_out = softmax(t_out / t_temp, dim=-1)
-    return -(t_out * s_out).sum(dim=-1).mean()
+        # Calculate the loss
+        s_lsm = log_softmax(s_out / self.s_temp, dim=-1)
+        return -(t_centered * s_lsm).sum(dim=-1).mean()
 
 
 def mean_entropy(x: T.Tensor, temp: float = 0.1) -> T.Tensor:
@@ -94,6 +112,45 @@ def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
     return -T.log(distances + eps).mean()
 
 
+class DINOHead(nn.Module):
+    """The projection head for DINO-v2.
+
+    Adapted from:
+    https://github.com/facebookresearch/dinov2/blob/main/dinov2/layers/dino_head.py
+    """
+
+    def __init__(
+        self,
+        inpt_dim: int,
+        outp_dim: int,
+        bottleneck_dim: int = 0,
+    ) -> None:
+        super().__init__()
+        bottleneck_dim or inpt_dim // 2
+        self.mlp = MLP(
+            inpt_dim=inpt_dim,
+            outp_dim=bottleneck_dim or inpt_dim // 2,
+            hddn_dim=inpt_dim,
+            num_blocks=2,
+            act_h="SiLU",
+        )
+        self.apply(self.reset_params)
+        self.last_layer = weight_norm(nn.Linear(self.mlp.outp_dim, outp_dim))
+        self.last_layer.parametrizations.weight.original0.data.fill_(1)
+
+    def reset_params(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x: T.Tensor) -> T.Tensor:
+        x = self.mlp(x)
+        eps = 1e-6 if x.dtype == T.float16 else 1e-12
+        x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
+        return self.last_layer(x)
+
+
 class JetDINO(pl.LightningModule):
     """Dino-v2 (really iBOT) model for jets."""
 
@@ -106,6 +163,7 @@ class JetDINO(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
+        embed_dim: int = 4096,
         t_ema: float = 0.998,
     ) -> None:
         super().__init__()
@@ -120,37 +178,34 @@ class JetDINO(pl.LightningModule):
 
         # The transformer encoder for the constituents
         self.encoder = Transformer(**encoder_config)
-        self.output_dim = self.encoder.dim  # For fine tuning
+        self.t_encoder = Transformer(**encoder_config)
 
         # The different linear embedding layers
         self.csts_id_embedder = nn.Embedding(CSTS_ID, self.encoder.dim)
         self.ctst_embedder = nn.Linear(self.csts_dim, self.encoder.dim)
+        self.t_csts_id_embedder = nn.Embedding(CSTS_ID, self.encoder.dim)
+        self.t_ctst_embedder = nn.Linear(self.csts_dim, self.encoder.dim)
 
-        # The projection layer into the contrastive space
-        self.projector = MLP(
-            inpt_dim=self.output_dim,
-            outp_dim=self.output_dim,
-            hddn_dim=2 * self.output_dim,
-            num_blocks=2,
-            norm="LayerNorm",
-            act_h="SiLU",
-        )
+        # The projection head for into the contrastive space
+        self.projector = DINOHead(inpt_dim=self.encoder.dim, outp_dim=embed_dim)
+        self.t_projector = DINOHead(inpt_dim=self.encoder.dim, outp_dim=embed_dim)
 
-        # Make a copy of the full network for the teacher
-        self.t_csts_id_embedder = deepcopy(self.csts_id_embedder)
-        self.t_ctst_embedder = deepcopy(self.ctst_embedder)
-        self.t_encoder = deepcopy(self.encoder)
-        self.t_projector = deepcopy(self.projector)
+        # The "contrastive" loss function
+        self.dino_loss = DINOv2Loss(dim=embed_dim)
+
+        # Turn off gradients for teacher components as it "learns" via EMA
+        self.t_ema = t_ema
         self.t_csts_id_embedder.requires_grad_(False)
         self.t_ctst_embedder.requires_grad_(False)
         self.t_encoder.requires_grad_(False)
         self.t_projector.requires_grad_(False)
 
+        # Save the output dimensions
+        self.output_dim = self.encoder.dim
+        self.embed_dim = embed_dim
+
         # The learnable null token (unique for positional encoding)
         self.null_token = nn.Parameter(T.randn((self.num_csts, self.output_dim)) * 1e-3)
-
-        # Dino parameters
-        self.t_ema = t_ema
 
         # Basic classifier and accuracy for evaluating encoder
         self.classifier_head = class_head(inpt_dim=self.encoder.dim, outp_dim=n_classes)
@@ -172,43 +227,46 @@ class JetDINO(pl.LightningModule):
         inv_mask = mask & ~null_mask
 
         # Pass through the student model with dropped nodes under both configs
-        cls_s1, x_s1 = self.mask_and_encode(normed_csts, csts_id, mask, null_mask)
-        cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
+        _cls_s1, x_s1 = self.mask_and_encode(normed_csts, csts_id, mask, null_mask)
+        _cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
 
         # Pass through the teacher model without dropping
         with set_eval(self), T.no_grad():
-            cls_t, x_t = self.pass_teacher(normed_csts, csts_id, mask)
+            e_t, e_mask = self.pass_teacher(normed_csts, csts_id, mask)
+            x_t = self.t_projector(e_t)[:, self.t_encoder.num_registers :]
+            # cls_t = w_t[:, 0]
+            # x_t = x_t[:, self.t_encoder.num_registers :]
 
         # Get the dino losses for the class tokens using both student views
-        loss_dino = dino_loss(cls_s1, cls_t)
-        loss_dino += dino_loss(cls_s2, cls_t)
+        # loss_dino = dino_loss(cls_s1, cls_t)
+        # loss_dino += dino_loss(cls_s2, cls_t)
 
         # Get the ibot losses for the constituent using both student views
-        loss_ibot = dino_loss(x_s1[mask], x_t[mask])
-        loss_ibot += dino_loss(x_s2[mask], x_t[mask])
+        loss_ibot = self.dino_loss(x_s1[mask], x_t[mask])
+        loss_ibot += self.dino_loss(x_s2[mask], x_t[mask])
 
         # Get the regularisation loss (we want to maximise the entropy)
-        reg_cls = -mean_entropy(cls_s1)
-        reg_cls += -mean_entropy(cls_s2)
-        reg_csts = -mean_entropy(x_s1[mask])
-        reg_csts += -mean_entropy(x_s2[mask])
+        # reg_cls = -mean_entropy(cls_s1)
+        # reg_cls += -mean_entropy(cls_s2)
+        # reg_csts = -mean_entropy(x_s1[mask])
+        # reg_csts += -mean_entropy(x_s2[mask])
 
         # Do an intervention for the loss sometimes being NaN
-        if T.isnan(loss_dino):
-            loss_dino = T.zeros(1, device=self.device)
-            print("Intervention: loss_dino was NaN")
+        # if T.isnan(loss_dino):
+        #     loss_dino = T.zeros(1, device=self.device)
+        #     print("Intervention: loss_dino was NaN")
         if T.isnan(loss_ibot):
             loss_ibot = T.zeros(1, device=self.device)
             print("Intervention: loss_ibot was NaN")
-        if T.isnan(reg_cls):
-            reg_cls = T.zeros(1, device=self.device)
-            print("Intervention: reg_cls was NaN")
-        if T.isnan(reg_csts):
-            reg_csts = T.zeros(1, device=self.device)
-            print("Intervention: reg_csts was NaN")
+        # if T.isnan(reg_cls):
+        # reg_cls = T.zeros(1, device=self.device)
+        # print("Intervention: reg_cls was NaN")
+        # if T.isnan(reg_csts):
+        #     reg_csts = T.zeros(1, device=self.device)
+        #     print("Intervention: reg_csts was NaN")
 
         # Combine the losses
-        total_loss = loss_dino + loss_ibot + reg_cls + reg_csts
+        total_loss = loss_ibot
 
         # Perform the ema updates (training only)
         if self.training:
@@ -217,9 +275,15 @@ class JetDINO(pl.LightningModule):
             ema_param_sync(self.encoder, self.t_encoder, self.t_ema)
             ema_param_sync(self.projector, self.t_projector, self.t_ema)
 
+        # Measure the occupancy of the teacher outputs
+        # cls_occ = T.unique(T.argmax(cls_t, dim=-1)).size(0) / self.embed_dim
+        x_occ = T.unique(T.argmax(x_t[mask], dim=-1)).size(0) / self.embed_dim
+        # self.log(f"{prefix}/cls_occ", cls_occ)
+        self.log(f"{prefix}/x_occ", x_occ)
+
         # Dont run probe too often as we must be fair to MPM!
         if batch_idx % 20 == 0 or prefix == "valid":
-            class_out = self.classifier_head(x_t.detach(), mask=mask)
+            class_out = self.classifier_head(e_t.detach(), mask=e_mask)
             probe_loss = cross_entropy(class_out, labels)
             total_loss += probe_loss
             self.acc(class_out, labels)  # Updates internal state
@@ -228,10 +292,10 @@ class JetDINO(pl.LightningModule):
 
         # Log the metrics
         self.log(f"{prefix}/total_loss", total_loss)
-        self.log(f"{prefix}/dino_loss", loss_dino)
+        # self.log(f"{prefix}/dino_loss", loss_dino)
         self.log(f"{prefix}/ibot_loss", loss_ibot)
-        self.log(f"{prefix}/reg_loss", reg_cls)
-        self.log(f"{prefix}/reg_loss", reg_csts)
+        # self.log(f"{prefix}/reg_loss", reg_cls)
+        # self.log(f"{prefix}/reg_loss", reg_csts)
         return total_loss
 
     def mask_and_encode(
@@ -271,8 +335,8 @@ class JetDINO(pl.LightningModule):
         """Get the outputs of the teacher."""
         x = self.t_ctst_embedder(csts) + self.t_csts_id_embedder(csts_id)
         x = self.t_encoder(x, mask=mask)
-        x = self.t_projector(x)
-        return x[:, 0], x[:, self.t_encoder.num_registers :]
+        mask = self.t_encoder.get_combined_mask(mask)
+        return x, mask
 
     def pass_student(
         self,
@@ -283,8 +347,8 @@ class JetDINO(pl.LightningModule):
         """Get the outputs of the student."""
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
         x = self.encoder(x, mask=mask)
-        x = self.projector(x)
-        return x[:, 0], x[:, self.encoder.num_registers :]
+        mask = self.encoder.get_combined_mask(mask)
+        return x, mask
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
         return self._shared_step(sample, batch_idx, "train")

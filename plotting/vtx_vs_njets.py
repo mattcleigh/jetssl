@@ -85,8 +85,8 @@ def main(cfg: DictConfig):
         # Cycle through the classes and plot the results
         for c in classes:
             fig, axes = figs[c]
-            axes[0].plot(n_samples, f1s[c], "-o", label=model)
-            axes[1].plot(n_samples, accs[c], "-o", label=model)
+            axes[0].plot(n_samples, f1s[c], "-o", label=model.split("_")[1])
+            axes[1].plot(n_samples, accs[c], "-o", label=model.split("_")[1])
 
     # Tidy up and save
     for c in classes:
@@ -104,7 +104,10 @@ def main(cfg: DictConfig):
         # Make the directory and save the plot
         path = Path(cfg.plot_dir)
         path.mkdir(parents=True, exist_ok=True)
-        fig.savefig(path / (cfg.outfile + f"_{c}.pdf"))
+        nm = (
+            "" if c == "all" else c
+        )  # Snakemake is looking for a file without any flags
+        fig.savefig(path / (cfg.outfile + f"{nm}.pdf"))
         plt.close()
 
 

@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
             acc.append((labels == pred).mean())
 
         # Plot the accuracies
-        ax.plot(n_samples, acc, "-o", label=model)
+        ax.plot(n_samples, acc, "-o", label=model.split("_")[1])
 
     # Tidy up
     ax.set_xlabel("Number of training samples")

@@ -1,6 +1,6 @@
 _target_: src.models.mpm_flow.MPMFlow
 
-embed_dim: 64
+embed_dim: 128
 
 defaults:
   - _self_

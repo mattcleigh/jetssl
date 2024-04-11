@@ -1,5 +1,7 @@
 _target_: src.models.jetdino.JetDINO
 
+embed_dim: 4096
+
 defaults:
   - _self_
   - encoder_config: small.yaml

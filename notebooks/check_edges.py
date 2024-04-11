@@ -1,4 +1,5 @@
 import rootutils
+import torch as T
 
 root = rootutils.setup_root(search_from=".", pythonpath=True)
 
@@ -7,11 +8,7 @@ from src.datamodules.hdf import JetMappable
 # Define the type of information to load into the dict from the HDF files
 # List containing: key, type, slice
 features = [
-    ("csts", "f", [32]),
-    ("csts_id", "f", [32]),
-    ("mask", "bool", [32]),
     ("labels", "l"),
-    ("vtx_id", "l"),
 ]
 
 
@@ -20,12 +17,11 @@ sh_data = JetMappable(
     path="/srv/fast/share/rodem/shlomi",
     features=features,
     n_classes=3,
-    processes="training",
+    processes="val",
     n_files=1,
 )
 sh_labels = ["light", "charm", "bottom"]
 
-import torch as T
 
 csts = T.from_numpy(sh_data.data_dict["csts"])
 mask = T.from_numpy(sh_data.data_dict["mask"])

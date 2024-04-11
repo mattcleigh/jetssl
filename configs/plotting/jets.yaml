@@ -12,5 +12,5 @@ path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune/
 plot_dir: plots/
 outfile: test
 
-models:
-  a: vertexer_600000
+models: {}
+
