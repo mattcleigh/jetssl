@@ -35,11 +35,26 @@ Ideally trainings should always be run using `python train.py experiment=...`
 
 To run this project, follow these steps:
 
-1. Pull the docker image from the hub
-```
-apptainer pull docker://gitlab-registry.cern.ch/mleigh/jetssl:latest
-```
-2. Run the training script with the desired configuration inside the container:
+1. Setup your environment:
+* Pull the docker image  `gitlab-registry.cern.ch/mleigh/jetssl:latest`
+* OR or install the `requirements.txt` in a virtual environment of your choice
+    * Requires `python > 3.10`
+
+2. Setup Data
+* This project is designed to work with two datasets which must be downloaded and converted into the correct format.
+    1. JetClass
+        * Download from `https://zenodo.org/records/6619768`
+        * Convert using `scripts/make_jetclass.py`
+    2. Secondary Vertex Finding in Jets Dataset (Shlomi)
+        * Download from `https://zenodo.org/records/4044628`
+        * Convert using `scripts/make_shlomi.py`
+* All my paths are hardcoded at the moment so you will have to change them
+    * This is something that will be fixed in a later update
+    * You can find all the hardcoded paths by
+        * `grep -r "/srv/"`
+
+3. Train
+* Run the training script with the desired configuration:
 ```
 python scripts/train.py experiment=train_mpm.yaml
 ```
