@@ -13,6 +13,10 @@ user**/**
 **user**
 *.snakemake
 *.pytest
+.config/
+.nv/
+
+
 
 # Anything with cache in the name, pytest, ruff, or wandb...
 *cache*
