@@ -1,25 +1,23 @@
-from functools import partial
-
 import torch as T
 from torch import nn
 from torch.nn.functional import cross_entropy
-from torch.utils.data.dataloader import default_collate
+from torchpq.clustering import KMeans
 
 from src.models.mpm_base import MPMBase
 
 
-class MPMToken(MPMBase):
-    """Clustering and CE for the constituents."""
+class MPMKmeans(MPMBase):
+    """Perform kmeans clustering the use crossent for the constituents."""
 
     def __init__(
         self,
         *args,
-        labeller: partial,
+        kmeans_config: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.labeller = labeller(inpt_dim=self.csts_dim)
-        self.csts_head = nn.Linear(self.decoder.dim, self.labeller.num_labels)
+        self.kmeans = KMeans(**kmeans_config)
+        self.csts_head = nn.Linear(self.decoder.dim, self.kmeans.n_clusters)
 
     def masked_cst_loss(
         self,
@@ -28,8 +26,8 @@ class MPMToken(MPMBase):
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
-        """Calulate the loss using the labeller."""
-        labels = self.labeller(normed_csts[null_mask]).long()
+        """Calculate the loss using the labeller."""
+        labels = self.kmeans.predict(normed_csts[null_mask].T.contiguous()).long()
         preds = self.csts_head(decoder_outs[null_mask])
         return cross_entropy(preds, labels, label_smoothing=0.1)
 
@@ -38,28 +36,29 @@ class MPMToken(MPMBase):
         preds = self.csts_head(decoder_outs)
         probs = T.softmax(preds, dim=-1)
         idxes = T.multinomial(probs, 1).squeeze(1)
-        samples = self.labeller.idx_to_code(idxes)
+        samples = self.kmeans.centroids.index_select(1, idxes).T
         return self.normaliser.reverse(samples)
 
     def on_fit_start(self) -> None:
-        """At the start of the fit fill in the normaliser and labeller.
+        """At the start of the fit, fit the kmeans."""
+        # Skip kmeans has already been initialised (e.g. from a checkpoint)
+        if self.kmeans.centroids is not None:
+            return
 
-        Only use 30 batches but this will be sufficient to get a good fit.
-        """
-        n_store = []
-        m_store = []
+        # Load the first 50 batches of training data
+        csts = []
+        mask = []
         loader = self.trainer.datamodule.train_dataloader()
-        loader.num_workers = 0  # No multithreading
-        loader.collate_fn = default_collate  # Turn off the batch compression
         for i, sample in enumerate(loader):
-            n_store.append(sample["csts"])
-            m_store.append(sample["mask"])
-            if i > 30:
+            csts.append(sample["csts"])
+            mask.append(sample["mask"])
+            if i > 50:
                 break
-        csts = T.vstack(n_store).to(self.device)
-        mask = T.vstack(m_store).to(self.device)
+        csts = T.vstack(csts).to(self.device)
+        mask = T.vstack(mask).to(self.device)
 
         # Fit the normaliser such that the labeller uses scaled inputs
-        self.normaliser.fit(csts, mask, freeze=False)  # Dont freeze yet!
+        self.normaliser.fit(csts, mask, freeze=True)  # 50 batches should be enough
         csts = self.normaliser(csts, mask)  # Pass through the normaliser
-        self.labeller.fit(csts, mask)  # Fit the labeller to the normalised inputs
+        inputs = csts[mask].T.contiguous()
+        self.kmeans.fit(inputs)

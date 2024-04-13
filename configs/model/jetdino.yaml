@@ -1,10 +1,13 @@
 _target_: src.models.jetdino.JetDINO
 
-embed_dim: 4096
+embed_dim: 8192
+
+encoder_config:
+  layerscale_init: 1.0e-1 # Not too stong else CLS token is degenerate
 
 defaults:
-  - _self_
   - encoder_config: small.yaml
   - optimizer: default.yaml
   - scheduler: warmup.yaml
   - class_head: ca.yaml
+  - _self_

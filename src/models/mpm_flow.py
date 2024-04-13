@@ -23,22 +23,16 @@ class MPMFlow(MPMBase):
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
         """Calulate the loss under the flow."""
-        # The flow can't handle discrete targets
-        # So we need to add noise to the neutral impact parameters (last 4)
-        # This is a hack because it is hardcoded but works for now
-        # This crap below is all because using multiple slices no longer allows inplace
-        neut = null_mask & ((csts_id == 0) | (csts_id == 2))
-        neut = neut.unsqueeze(-1).expand_as(normed_csts).clone()
-        neut[..., :-4] = False  # Which variables we want to change
-        normed_csts[neut] = T.randn_like(normed_csts[neut])
+        # The flow can't handle discrete targets which unfortunately affects the
+        # impact paramters. Even for charged particles, there are discrete values
+        # particularly in d0_err and dz_err. So we will add a tiny bit of noise.
+        # At this stage these variables should be normalised, so hopefully adding a
+        # little extra noise won't hurt.
+        normed_csts[..., -4:] += 0.05 * T.randn_like(normed_csts[..., -4:])
 
-        return (
-            self.flow.forward_kld(
-                normed_csts[null_mask].float(),
-                context=self.csts_head(decoder_outs[null_mask]).float(),
-            )
-            / 3
-        )  # Arbitrary scaling factor
+        # Calculate the conditional likelihood
+        ctxt = self.csts_head(decoder_outs[null_mask]).float()
+        return self.flow.forward_kld(normed_csts[null_mask].float(), context=ctxt)
 
     def sample_csts(self, decoder_outs: T.Tensor) -> T.Tensor:
         """Get an estimate of the dropped csts using the outputs."""

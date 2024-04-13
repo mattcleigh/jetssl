@@ -9,7 +9,7 @@ from src.models.mpm_base import MPMBase
 from src.models.mpm_diff import MPMDiff
 from src.models.mpm_flow import MPMFlow
 from src.models.mpm_reg import MPMReg
-from src.models.mpm_token import MPMToken
+from src.models.mpm_token import MPMKmeans
 from src.utils import KMeansLabeller
 
 # All the default arguments for the models
@@ -109,9 +109,9 @@ def test_diff() -> None:
     model.training_step(jet_dict, 0)
 
 
-def test_token() -> None:
+def test_kmeans() -> None:
     jet_dict = dummy_input()
-    model = MPMToken(
+    model = MPMKmeans(
         data_sample={k: v[0] for k, v in jet_dict.items()},
         n_classes=3,
         encoder_config=ENCODER,

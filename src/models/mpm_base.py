@@ -40,6 +40,8 @@ class MPMBase(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
+        id_weight: float = 1.0,
+        cst_weight: float = 1.0,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -47,6 +49,10 @@ class MPMBase(pl.LightningModule):
         # Break down the data sample into the dimensions needed for the model
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
+
+        # Loss weights
+        self.id_weight = id_weight
+        self.cst_weight = cst_weight
 
         # The normalisation layer (for the continuous features only)
         self.normaliser = IterativeNormLayer(self.csts_dim)
@@ -96,7 +102,7 @@ class MPMBase(pl.LightningModule):
         cst_loss = self.masked_cst_loss(normed_csts, csts_id, null_mask, decoder_outs)
 
         # Combine the losses
-        loss = id_loss + cst_loss
+        loss = self.id_weight * id_loss + self.cst_weight * cst_loss
 
         # Use the probe on all inputs! Not very often!
         if batch_idx % 20 == 0 or prefix == "valid":

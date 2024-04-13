@@ -149,8 +149,8 @@ class JetCWola(Dataset):
 
     def __init__(
         self,
-        num_signal: int = 1000_000,
-        num_background: int = 10_000,
+        num_signal: int = 100_000,
+        num_background: int = 1000_000,
         signal_process: str = "TTBar",
         background_process: str = "ZJetsToNuNu",
         **kwargs,
@@ -162,15 +162,15 @@ class JetCWola(Dataset):
         self.signal = JetMappable(
             n_classes=1,
             processes=signal_process,
-            n_files=10,
+            n_files=10,  # Distribute among 10 files
             n_jets=num_signal // 10,
             **kwargs,
         )
         self.n_signal = len(self.signal)
         self.background = JetMappable(
-            n_classes=0,
+            n_classes=1,
             processes=background_process,
-            n_files=10,
+            n_files=10,  # Distribute among 10 files
             n_jets=num_background // 10,
             **kwargs,
         )

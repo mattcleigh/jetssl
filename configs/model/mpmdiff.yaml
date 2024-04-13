@@ -1,5 +1,8 @@
 _target_: src.models.mpm_diff.MPMDiff
 
+id_weight: 0.0
+cst_weight: 1.0
+
 embed_dim: 128
 
 diff_config:

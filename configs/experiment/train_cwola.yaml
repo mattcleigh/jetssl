@@ -3,7 +3,7 @@
 defaults:
   - override /datamodule: jetclass_cwola.yaml
   - override /model: jetclassifier.yaml
-  - override /callbacks: finetune.yaml
+  - override /callbacks: cwola.yaml
 
 # Change target to the CWoLa model
 model:
@@ -11,23 +11,22 @@ model:
   scheduler:
     warmup_steps: 5000
 
-# Dont train for too long
+# Manually stop at 20 epochs
 trainer:
-  max_epochs: null
-  max_steps: 50_000
+  max_epochs: 20
 
 # Key parameters for fine-tuning
-num_signal: 10000
+n_jets: 50_000 # This is for the num_signal but we will use the same name
 
 # Make sure to load only the number of signal jets
 datamodule:
   train_set:
-    num_signal: ${num_signal}
+    num_signal: ${n_jets}
   val_set:
-    num_signal: ${num_signal}
+    num_signal: ${n_jets}
   test_set:
-    num_signal: ${num_signal}
+    num_signal: ${n_jets}
 
 # Bookkeeping
 project_name: jetssl_finetune
-network_name: cwola_classifier_${num_signal}
+network_name: cwola_${n_jets}

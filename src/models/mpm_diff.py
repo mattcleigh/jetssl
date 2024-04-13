@@ -33,4 +33,5 @@ class MPMDiff(MPMBase):
         x1 = T.randn((decoder_outs.shape[0], self.csts_dim), device=self.device)
         ctxt = self.csts_head(decoder_outs)
         times = T.linspace(1, 0, 100, device=decoder_outs.device)
-        return self.diff.generate(x1, ctxt, times)
+        gen = self.diff.generate(x1, ctxt, times)
+        return self.normaliser.reverse(gen)

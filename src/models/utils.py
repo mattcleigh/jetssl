@@ -78,16 +78,19 @@ class VectorDiffuser(nn.Module):
         v = self.forward(xt, t, ctxt)
 
         if self.training:
-            ema_param_sync(self.mlp, self.ema_mlp, 0.9995)
+            ema_param_sync(self.mlp, self.ema_mlp, 0.999)
 
         return (v - (x1 - x0)).square().mean()
 
+    # Turn off autocast
+    @T.autocast("cuda", enabled=False)  # Dont autocast during integration
+    @T.autocast("cpu", enabled=False)
     def generate(self, x1: T.Tensor, ctxt: T.Tensor, times: T.Tensor) -> T.Tensor:
         """Generate a sample."""
 
         def ode_fn(t, xt):
             t = t * xt.new_ones([xt.shape[0], 1])
-            return self.forward(xt, t, ctxt, use_ema=False)
+            return self.forward(xt, t, ctxt, use_ema=True)
 
         return odeint(ode_fn, x1, times, method="midpoint")[-1]
 

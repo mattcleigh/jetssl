@@ -35,5 +35,5 @@ vtx_mask = vtx_mask & ~eye  # No self-edges
 # Calculate the number of same-vertex edges
 vtx_same = vtx_id.unsqueeze(-1) == vtx_id.unsqueeze(-2)
 targets = vtx_same[vtx_mask]
-
 pos_weight = (targets == 0).sum() / targets.sum()
+print(pos_weight)

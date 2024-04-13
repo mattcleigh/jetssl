@@ -27,18 +27,18 @@ proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 
 # Define the model backbones to finetune
-model_names = ["diff", "flow", "onlyid", "reg", "token", "untrained"] # dino
+model_names = ["diff", "flow", "onlyid", "reg", "token", "dino", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {
     "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
     "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
     "vtx": ["experiment=train_vertexer"],
-    # "cwola": ["experiment=train_cwola", "datamodule=shlomi"],
+    "cwola": ["experiment=train_cwola"],
 }
 
-# The number of jets to use per downstream task (per process)
-n_jets = [1e4, 5e4, 1e5, 5e5, 1e6]
+# Define the number of jets to finetune on
+n_jets = [1e4, 3.162e4, 1e5, 3.162e5, 1e6]
 
 ########################################
 
@@ -56,6 +56,18 @@ rule all:
 # For each downstream task make a rule to plot, export and finetune
 for dt in dt_names:
 
+    # For the cwola task, we need much less jets!
+    if dt == "cwola":
+        n_jets = [n//10 for n in n_jets]
+
+    # Work out whick plotting script to run
+    if dt == "vtx":
+        plot_script = "plotting/vtx_vs_njets.py"
+    elif dt == "cwola":
+        plot_script = "plotting/sic_vs_njets.py"
+    else:
+        plot_script = "plotting/acc_vs_njets.py"
+
     # Plotting rule
     # Takes in: Exported scores from each model per n_jets
     # Produces: A plot of the accuracy vs n_jets
@@ -67,7 +79,7 @@ for dt in dt_names:
         output:
             f"{plot_dir}{dt}.pdf",
         params:
-            "plotting/acc_vs_njets.py" if dt != "vtx" else "plotting/vtx_vs_njets.py",
+            plot_script,
             f"outfile={dt}",
             *(f"+models.{m}={dt}_{m}" for m in model_names), # Will search for the njets automatically
             f"plot_dir={plot_dir}",

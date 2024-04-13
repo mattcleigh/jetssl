@@ -18,7 +18,7 @@ class MPMReg(MPMBase):
         null_mask: T.BoolTensor,
         decoder_outs: T.Tensor,
     ) -> T.Tensor:
-        """Calulate the loss using direct regression."""
+        """Calculate the loss using direct regression."""
         csts_out = self.csts_head(decoder_outs[null_mask])
         return (normed_csts[null_mask] - csts_out).abs().mean()
 

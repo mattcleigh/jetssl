@@ -1,4 +1,12 @@
-_target_: src.models.mpm_token.MPMToken
+_target_: src.models.mpm_token.MPMKmeans
+
+id_weight: 0.0
+cst_weight: 1.0
+
+kmeans_config:
+  n_clusters: 8192
+  max_iter: 500
+  verbose: 10
 
 defaults:
   - _self_
@@ -7,4 +15,3 @@ defaults:
   - optimizer: default.yaml
   - scheduler: warmup.yaml
   - class_head: ca.yaml
-  - labeller: kmeans.yaml

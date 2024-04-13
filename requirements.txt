@@ -13,6 +13,10 @@ packaging
 ninja
 flash-attn
 
+# fast clusering and kmeans
+cupy
+torchpq
+
 # general data handling
 pandas
 tables

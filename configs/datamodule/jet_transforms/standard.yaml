@@ -3,5 +3,3 @@ _partial_: True
 transforms:
   - _target_: src.datamodules.transforms.log_squash_csts_pt
     _partial_: True
-  - _target_: src.datamodules.transforms.tanh_d0_dz
-    _partial_: True
