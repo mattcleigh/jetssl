@@ -3,7 +3,7 @@
 
 defaults:
   - override /datamodule: jetclass_masked
-  - override /model: mpmdiff # jetdino, mpmflow, mpmreg, mpmkmeans, mpmdiff, mpmonlyid
+  - override /model: jetdino # jetdino, mpmflow, mpmreg, mpmkmeans, mpmdiff, mpmonlyid
 
 # Allows us to use the partially mappable datasets
 trainer:
@@ -13,4 +13,4 @@ trainer:
 
 # Model modifications
 project_name: jetssl
-network_name: diff # dino, flow, reg, kmeans, diff, onlyid
+network_name: dino # dino, flow, reg, kmeans, diff, onlyid

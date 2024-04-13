@@ -232,6 +232,7 @@ class JetDINO(pl.LightningModule):
         cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
 
         # Pass through the teacher model without dropping
+        # We want to keep the raw backbone output for the probe
         with set_eval(self), T.no_grad():
             e_t, e_mask = self.pass_teacher(normed_csts, csts_id, mask)
             w_t = self.t_projector(e_t)
