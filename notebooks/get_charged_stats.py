@@ -53,6 +53,10 @@ csts_id = jc_data.data_dict["csts_id"]
 charged_mask = mask & ((csts_id != 0) & (csts_id != 2))
 charged = csts[..., -4:][charged_mask]  # We only want the impact parameters
 
+import numpy as np
+
+len(np.unique(charged[:, 1]))
+
 # Make a quantile transformer for the charged particles
 qt = QuantileTransformer(output_distribution="normal", n_quantiles=1000)
 qt.fit(charged)
@@ -62,6 +66,16 @@ dump(qt, "impact_processor.joblib")
 import time
 
 ts = time.time()
-qt.transform(charged[:1000_000])
+transformed = qt.transform(charged[:1000_000])
+from mltools.mltools.plotting import plot_multi_hists
+
+plot_multi_hists(
+    transformed,
+    data_labels=["transformed"],
+    col_labels=["d0", "dz", "d0_err", "dz_err"],
+    bins=100,
+    path="transformed.png",
+)
+
 te = time.time()
 print(f"Time to fit the quantile transformer: {te - ts} s")

@@ -15,15 +15,16 @@ class JetBackbone(nn.Module):
     def __init__(
         self,
         normaliser: nn.Module,
-        ctst_embedder: nn.Module,
-        id_embedder: nn.Module,
+        csts_emb: nn.Module,
+        csts_id_emb: nn.Module | None,
         encoder: nn.Module,
     ) -> None:
         super().__init__()
         self.normaliser = normaliser
-        self.ctst_embedder = ctst_embedder
-        self.id_embedder = id_embedder
+        self.csts_emb = csts_emb
+        self.csts_id_emb = csts_id_emb
         self.encoder = encoder
+        self.output_dim = encoder.outp_dim
 
     def forward(
         self,
@@ -35,7 +36,9 @@ class JetBackbone(nn.Module):
         """Pass through the complete backbone."""
         if do_norm:
             csts = self.normaliser(csts, mask)
-        x = self.ctst_embedder(csts) + self.id_embedder(csts_id)
+        x = self.csts_emb(csts)
+        if self.csts_id_emb is not None:
+            x = x + self.csts_id_emb(csts_id)
         x = self.encoder(x, mask=mask)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
