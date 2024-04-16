@@ -51,7 +51,10 @@ def batch_preprocess_impact(batch: list, fn: BaseEstimator) -> dict:
 
     # Check that the required keys are present
     assert all(k in jet_dict for k in ["csts", "csts_id", "mask"])
-    assert jet_dict["csts"].shape[-1] >= 4, "Expected at least 4 features in the csts"
+
+    # If there are no impact parameters to reshape, skip
+    if jet_dict["csts"].shape[-1] < 7:
+        return jet_dict
 
     # Pass the constituent impact parameters through the preprocessor
     csts = jet_dict["csts"]

@@ -10,6 +10,6 @@ vertex_config:
   norm: LayerNorm
 
 defaults:
-  - _self_
   - optimizer: default.yaml
-  - scheduler: warmup.yaml
+  - scheduler: warmup_decay.yaml
+  - _self_

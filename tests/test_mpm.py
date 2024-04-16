@@ -7,14 +7,13 @@ import torch as T
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
-from itertools import combinations
 
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader, Dataset
 
 from mltools.mltools.lightning_utils import linear_warmup_exp_decay
 from mltools.mltools.transformers import ClassAttentionPooling
-from src.models.mpm_new import MaskedParticleModelling
+from src.models.mpm import MaskedParticleModelling
 from src.models.mpm_tasks import (
     DiffTask,
     FlowTask,
@@ -129,27 +128,16 @@ def dummy_input() -> T.Tensor:
     return jet_dict
 
 
-# Create a list of any two possible tasks to test together
-
-
-tasks = [id_task, reg_task, flow_task, kmeans_task, diff_task, probe_task]
-tasks = list(combinations(tasks, 2))
-
-jet_dict = dummy_input()
-model = MaskedParticleModelling(
-    data_sample={k: v[0] for k, v in jet_dict.items()},
-    n_classes=3,
-    encoder_config=ENCODER,
-    decoder_config=DECODER,
-    optimizer=OPT,
-    scheduler=SCHED,
-    tasks=tasks[0],
-    use_id=True,
-    do_mae=True,
-)
-trainer = Trainer(fast_dev_run=True, accelerator="cpu")
-loader = DataLoader(DictDataset(jet_dict), batch_size=3)
-trainer.fit(model, loader, loader)
+# Test all tasks individually and then all together
+tasks = [
+    {"id": id_task},
+    {"reg": reg_task},
+    {"flow": flow_task},
+    {"kmeans": kmeans_task},
+    {"diff": diff_task},
+    {"probe": probe_task},
+]
+tasks.append({k: v for t in tasks for k, v in t.items()})
 
 
 @pytest.mark.parametrize("tasks", tasks)
@@ -166,8 +154,9 @@ def test_base(tmpdir, tasks, do_mae, use_id) -> None:
         optimizer=OPT,
         scheduler=SCHED,
         tasks=tasks,
-        use_id=use_id,
-        do_mae=do_mae,
+        use_id=do_mae,
+        do_mae=use_id,
     )
-    trainer = Trainer(max_epochs=1, limit_train_batches=1, limit_val_batches=1)
-    trainer.fit(model, T.utils.data.DataLoader([jet_dict]))
+    trainer = Trainer(fast_dev_run=True, accelerator="cpu")
+    loader = DataLoader(DictDataset(jet_dict), batch_size=3)
+    trainer.fit(model, loader, loader)

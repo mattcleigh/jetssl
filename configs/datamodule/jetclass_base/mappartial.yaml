@@ -2,8 +2,6 @@ _target_: src.datamodules.hdf.JetMappablePartial
 _partial_: True
 n_classes: 10
 files_per_epoch: 10 # Should at least match the number of classes
-features:
-- [csts, f, [128]]
-- [mask, bool, [128]]
-- [csts_id, l, [128]]
-- [labels, l, null]
+
+defaults:
+  - features: default.yaml

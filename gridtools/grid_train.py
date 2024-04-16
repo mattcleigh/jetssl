@@ -25,7 +25,7 @@ def main() -> None:
                 "kmeans8k",
             ],
             "model": [
-                "jetdino",
+                "dino",
                 "mpmkmeans",
             ],
             "datamodule.loader_config.batch_size": [

@@ -11,7 +11,7 @@ from torchpq.clustering import KMeans
 
 from mltools.mltools.flows import rqs_flow
 from src.models.utils import VectorDiffuser
-from src.plotting_new import plot_continuous, plot_labels
+from src.plotting import plot_continuous, plot_labels
 
 # TODO(Matthew): Make this a parameter... somehow
 # 001
@@ -23,7 +23,6 @@ class TaskBase(nn.Module):
 
     def __init__(
         self,
-        mpm: nn.Module,
         *,  # Force keyword arguments
         name: str,
         weight: float = 1.0,
@@ -31,13 +30,14 @@ class TaskBase(nn.Module):
         apply_every: int = 1,
     ) -> None:
         super().__init__()
-        self.mpm = mpm
         self.name = name
         self.weight = weight
         self.detach = detach
         self.apply_every = apply_every
 
-    def get_loss(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
+    def get_loss(
+        self, parent: nn.Module, data: dict, batch_idx: int, prefix: str
+    ) -> T.Tensor:
         """Get the loss for the task."""
         # Return early, always run on validation
         if batch_idx % self.apply_every != 0 and prefix == "train":
@@ -45,45 +45,45 @@ class TaskBase(nn.Module):
 
         # Calculate the loss, detaching if necessary
         with T.no_grad() if self.detach else nullcontext():
-            loss = self._get_loss(data, prefix)
+            loss = self._get_loss(parent, data, prefix)
 
         # Log using the parent
-        self.mpm.log(f"{prefix}/{self.name}_loss", loss)
+        parent.log(f"{prefix}/{self.name}_loss", loss)
 
         # Return with the weight
         return self.weight * loss
 
     @T.no_grad()
-    def visualise(self, data: dict) -> None:
+    def visualise(self, parent: nn.Module, data: dict) -> None:
         """Visualise the task."""
         Path("plots").mkdir(exist_ok=True)
-        self._visualise(deepcopy(data))  # Don't want to modify the original
+        self._visualise(parent, deepcopy(data))  # Don't want to modify the original
 
-    def on_fit_start(self) -> None:
+    def on_fit_start(self, parent: nn.Module) -> None:
         """At the start of the fit, allow to pass without error."""
 
-    def _get_loss(self, data: dict) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict) -> T.Tensor:
         """Get the loss for the task."""
         raise NotImplementedError
 
-    def _visualise(self, data: dict) -> None:
+    def _visualise(self, parent: nn.Module, data: dict) -> None:
         """Visualise the task, optional."""
 
 
 class IDTask(TaskBase):
     """Task for predicting the ID of the constituent."""
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.head = nn.Linear(self.mpm.outp_dim, CSTS_ID)
+    def __init__(self, parent: nn.Module, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.head = nn.Linear(parent.outp_dim, CSTS_ID)
 
-    def _get_loss(self, data: dict, _prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         pred = self.head(data["outputs"][data["null_mask"]])
         target = data["csts_id"][data["null_mask"]]
         return cross_entropy(pred, target, label_smoothing=0.1)
 
-    def _visualise(self, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         pred = self.head(data["outputs"][data["null_mask"]])
         pred = T.softmax(pred, dim=-1)
@@ -94,20 +94,20 @@ class IDTask(TaskBase):
 class RegTask(TaskBase):
     """Task for regressing the properties of the constituent."""
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.head = nn.Linear(self.mpm.outp_dim, self.mpm.csts_dim)
+    def __init__(self, parent: nn.Module, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.head = nn.Linear(parent.outp_dim, parent.csts_dim)
 
-    def _get_loss(self, data: dict, _prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         pred = self.head(data["outputs"][data["null_mask"]])
         target = data["normed_csts"][data["null_mask"]]
         return (pred - target).abs().mean()
 
-    def _visualise(self, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         pred = self.head(data["outputs"][data["null_mask"]])
-        pred = self.mpm.normaliser.reverse(pred)
+        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 
@@ -115,17 +115,15 @@ class FlowTask(TaskBase):
     """Estimating the density of the constituents using a normalising flow."""
 
     def __init__(
-        self, *args, embed_dim: int = 128, flow_config: dict, **kwargs
+        self, parent: nn.Module, embed_dim: int, flow_config: dict, **kwargs
     ) -> None:
-        super().__init__(*args, **kwargs)
-        self.head = nn.Linear(self.mpm.outp_dim, embed_dim)
-        self.flow = rqs_flow(
-            xz_dim=self.mpm.csts_dim, ctxt_dim=embed_dim, **flow_config
-        )
+        super().__init__(**kwargs)
+        self.head = nn.Linear(parent.outp_dim, embed_dim)
+        self.flow = rqs_flow(xz_dim=parent.csts_dim, ctxt_dim=embed_dim, **flow_config)
 
     @T.autocast("cuda", enabled=False)  # Autocasting is bad for flows
     @T.autocast("cpu", enabled=False)
-    def _get_loss(self, data: dict, _prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # Unpack the data
         normed_csts = data["normed_csts"]
@@ -137,6 +135,8 @@ class FlowTask(TaskBase):
         # particularly in d0_err and dz_err. So we will add a tiny bit of noise.
         # At this stage these variables should be normalised, so hopefully adding a
         # little extra noise won't hurt.
+        # As this is an inplace operation, we need to clone the tensor
+        normed_csts = normed_csts.clone()
         normed_csts[..., -4:] += 0.05 * T.randn_like(normed_csts[..., -4:])
 
         # Calculate the conditional likelihood under the flow
@@ -144,23 +144,23 @@ class FlowTask(TaskBase):
         ctxt = self.head(outputs[null_mask]).float()
         return self.flow.forward_kld(inpt, context=ctxt)
 
-    def _visualise(self, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
         pred = self.flow.sample(ctxt.shape[0], context=ctxt)[0]
-        pred = self.mpm.normaliser.reverse(pred)
+        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 
 class KmeansTask(TaskBase):
     """Task for modelling the properties of the constituent using kmeans clustering."""
 
-    def __init__(self, *args, kmeans_config: dict, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent: nn.Module, kmeans_config: dict, **kwargs) -> None:
+        super().__init__(**kwargs)
         self.kmeans = KMeans(**kmeans_config)
-        self.head = nn.Linear(self.mpm.outp_dim, self.kmeans.n_clusters)
+        self.head = nn.Linear(parent.outp_dim, self.kmeans.n_clusters)
 
-    def _get_loss(self, data: dict, _prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # Get the target using the kmeans and the original csts
         target = data["normed_csts"][data["null_mask"]].T.contiguous()
@@ -170,16 +170,16 @@ class KmeansTask(TaskBase):
         pred = self.head(data["outputs"][data["null_mask"]])
         return cross_entropy(pred, target, label_smoothing=0.1)
 
-    def _visualise(self, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         pred = self.head(data["outputs"][data["null_mask"]])
         pred = T.softmax(pred, dim=-1)
         pred = T.multinomial(pred, 1).squeeze(1)
         pred = self.kmeans.centroids.index_select(1, pred).T
-        pred = self.normaliser.reverse(pred)
+        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
-    def on_fit_start(self) -> None:
+    def on_fit_start(self, parent: nn.Module) -> None:
         """At the start of the fit, fit the kmeans."""
         # Skip kmeans has already been initialised (e.g. from a checkpoint)
         if self.kmeans.centroids is not None:
@@ -188,18 +188,21 @@ class KmeansTask(TaskBase):
         # Load the first 50 batches of training data
         csts = []
         mask = []
-        loader = self.mpm.trainer.datamodule.train_dataloader()
+        loader = parent.trainer.train_dataloader
+        if loader is None:
+            parent.trainer.fit_loop.setup_data()
+            loader = parent.trainer.train_dataloader
         for i, data in enumerate(loader):
             csts.append(data["csts"])
             mask.append(data["mask"])
             if i > 50:
                 break
-        csts = T.vstack(csts).to(self.mpm.device)
-        mask = T.vstack(mask).to(self.mpm.device)
+        csts = T.vstack(csts).to(parent.device)
+        mask = T.vstack(mask).to(parent.device)
 
         # Fit the normaliser such that the labeller uses scaled inputs
-        self.mpm.normaliser.fit(csts, mask, freeze=True)  # 50 batches should be enough
-        csts = self.mpm.normaliser(csts, mask)  # Pass through the normaliser
+        parent.normaliser.fit(csts, mask, freeze=True)  # 50 batches should be enough
+        csts = parent.normaliser(csts, mask)  # Pass through the normaliser
         inputs = csts[mask].T.contiguous()
         self.kmeans.fit(inputs)
 
@@ -207,52 +210,48 @@ class KmeansTask(TaskBase):
 class DiffTask(TaskBase):
     """Use conditional diffusion to model the properties of the constituent."""
 
-    def __init__(self, *args, embed_dim: int, diff_config: dict, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.head = nn.Linear(self.mpm.outp_dim, embed_dim)
+    def __init__(
+        self, parent: nn.Module, embed_dim: int, diff_config: dict, **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.head = nn.Linear(parent.outp_dim, embed_dim)
         self.diff = VectorDiffuser(
-            inpt_dim=self.mpm.csts_dim, ctxt_dim=embed_dim, **diff_config
+            inpt_dim=parent.csts_dim, ctxt_dim=embed_dim, **diff_config
         )
 
-    def _get_loss(self, data: dict, _prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
         target = data["normed_csts"][data["null_mask"]]
         return self.diff.get_loss(target, ctxt)
 
-    def _visualise(self, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
-        x1 = T.randn((ctxt.shape[0], self.mpm.csts_dim), device=self.device)
+        x1 = T.randn((ctxt.shape[0], parent.csts_dim), device=ctxt.device)
         times = T.linspace(1, 0, 100, device=ctxt.device)
         pred = self.diff.generate(x1, ctxt, times)
-        pred = self.normaliser.reverse(pred)
+        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 
 class ProbeTask(TaskBase):
     """Classify the jet using the full outputs and the labels."""
 
-    def __init__(self, *args, class_head: partial, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.head = class_head(inpt_dim=self.mpm.outp_dim, outp_dim=self.mpm.n_classes)
-        self.acc = Accuracy("multiclass", num_classes=self.mpm.n_classes)
+    def __init__(self, parent: nn.Module, class_head: partial, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.head = class_head(inpt_dim=parent.outp_dim, outp_dim=parent.n_classes)
+        self.acc = Accuracy("multiclass", num_classes=parent.n_classes)
 
-    def _get_loss(self, data: dict, prefix: str) -> T.Tensor:
+    def _get_loss(self, parent: nn.Module, data: dict, prefix: str) -> T.Tensor:
         """Get the loss for this task."""
-        # Unpack the data
-        normed_csts = data["normed_csts"]
-        csts_id = data["csts_id"]
-        mask = data["mask"]
-        labels = data["labels"]
-
         # We must pass the full outputs through the backbone (no masking)
-        full, full_mask = self.mpm.full_encode(normed_csts, csts_id, mask)
+        full, full_mask = parent.full_encode(data)
         preds = self.head(full, mask=full_mask)
-        loss = cross_entropy(preds, labels)
+        loss = cross_entropy(preds, data["labels"])
 
         # Update and log the accuracy
-        self.acc(preds, labels)
-        self.mpm.log(f"{prefix}/{self.name}_accuracy", loss)
+        self.acc(preds, data["labels"])
+        parent.log(f"{prefix}/{self.name}_accuracy", loss)
 
         return loss

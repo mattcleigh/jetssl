@@ -1,0 +1,20 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=diff
+diff:
+  _target_: src.models.mpm_tasks.DiffTask
+  _partial_: True
+
+  weight: 1.0
+  detach: False
+  apply_every: 1
+
+  embed_dim: 128
+
+  diff_config:
+    time_dim: 16
+    mlp_config:
+      num_blocks: 3
+      hddn_dim: 128
+      act_h: SiLU
+      norm: LayerNorm
+      do_res: True
+      init_zeros: True

@@ -85,34 +85,6 @@ class DINOv2Loss(nn.Module):
         return -(t_centered * s_lsm).sum(dim=-1).mean()
 
 
-def mean_entropy(x: T.Tensor, temp: float = 0.1) -> T.Tensor:
-    """The average entropy of a batch of logits."""
-    marginal = softmax(x / temp, dim=-1).mean(dim=0)
-    return (marginal ** (-marginal)).log().sum()
-
-
-@T.autocast("cuda", enabled=False)
-def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
-    """Kozachenko-Leonenko entropic loss regularizer.
-
-    From Sablayrolles et al. - 2018 - Spreading vectors for similarity search
-    """
-    # Normalize the input
-    x = normalize(x, eps=eps, dim=-1)
-
-    # Calculate the matching pair idxes via the max inner produce
-    with T.no_grad():
-        dots = T.mm(x, x.t())
-        dots.view(-1)[:: (x.shape[0] + 1)].fill_(-1)  # Fill the diagonal with -1
-        min_idx = T.argmax(dots, dim=1)
-
-    # Get the distance between closest pairs
-    distances = pairwise_distance(x, x[min_idx])
-
-    # Return the kozachenko-leonenko entropy
-    return -T.log(distances + eps).mean()
-
-
 class DINOHead(nn.Module):
     """The projection head for DINO-v2.
 
@@ -150,6 +122,28 @@ class DINOHead(nn.Module):
         eps = 1e-6 if x.dtype == T.float16 else 1e-12
         x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
         return self.last_layer(x)
+
+
+@T.autocast("cuda", enabled=False)
+def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
+    """Kozachenko-Leonenko entropic loss regularizer.
+
+    From Sablayrolles et al. - 2018 - Spreading vectors for similarity search
+    """
+    # Normalize the input
+    x = normalize(x, eps=eps, dim=-1)
+
+    # Calculate the matching pair idxes via the max inner produce
+    with T.no_grad():
+        dots = T.mm(x, x.t())
+        dots.view(-1)[:: (x.shape[0] + 1)].fill_(-1)  # Fill the diagonal with -1
+        min_idx = T.argmax(dots, dim=1)
+
+    # Get the distance between closest pairs
+    distances = pairwise_distance(x, x[min_idx])
+
+    # Return the kozachenko-leonenko entropy
+    return -T.log(distances + eps).mean()
 
 
 class JetDINO(pl.LightningModule):

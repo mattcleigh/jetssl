@@ -1,0 +1,8 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=reg
+reg:
+  _target_: src.models.mpm_tasks.RegTask
+  _partial_: True
+
+  weight: 1.0
+  detach: False
+  apply_every: 1

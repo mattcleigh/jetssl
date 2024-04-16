@@ -31,7 +31,7 @@ class MaskedParticleModelling(pl.LightningModule):
         decoder_config: dict,
         optimizer: partial,
         scheduler: dict,
-        tasks: list,
+        tasks: dict,
         use_id: bool = True,
         do_mae: bool = True,
     ) -> None:
@@ -51,8 +51,8 @@ class MaskedParticleModelling(pl.LightningModule):
             The optimizer to be used.
         scheduler : dict
             The scheduler to be used.
-        tasks : list
-            The list of tasks to be used. Sould be a list of partials.
+        tasks : dict
+            A dictionary of tasks to be used. Sould be a list of partials.
         use_id : bool, optional
             Whether to include the ID information in the network inputs,
             by default True.
@@ -94,7 +94,7 @@ class MaskedParticleModelling(pl.LightningModule):
         self.null_token = nn.Parameter(T.randn((self.num_csts, self.outp_dim)) * 1e-3)
 
         # Initialise each of the tasks
-        self.tasks = [task(self) for task in tasks]
+        self.tasks = nn.ModuleDict({k: v(self, name=k) for k, v in tasks.items()})
 
         # Test the save epoch end callback which saves an untrained backbone
         self.on_train_epoch_end()
@@ -110,14 +110,14 @@ class MaskedParticleModelling(pl.LightningModule):
 
         # Calculate the losses per task and log
         loss = T.tensor(0.0, device=self.device)
-        for task in self.tasks:
-            loss = loss + task.get_loss(data, batch_idx, prefix)
+        for task in self.tasks.values():
+            loss = loss + task.get_loss(self, data, batch_idx, prefix)
         self.log(f"{prefix}/total_loss", loss)
 
         # Call the visualisation method for each task
         if prefix == "valid" and batch_idx == 0:
-            for task in self.tasks:
-                task.visualise(data)
+            for task in self.tasks.values():
+                task.visualise(self, data)
 
         return loss
 
@@ -191,7 +191,7 @@ class MaskedParticleModelling(pl.LightningModule):
         """Run the linear classifier using the encoder outputs."""
         class_out = self.classifier_head(encoder_outputs, mask=encoder_mask)
         loss = cross_entropy(class_out, labels)
-        self.acc(class_out, labels)  # Updates internal state
+        self.acc(class_out, labels)
         return loss
 
     def full_encode(self, data: dict) -> T.Tensor:
@@ -208,10 +208,10 @@ class MaskedParticleModelling(pl.LightningModule):
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
 
-    def training_step(self, data: tuple, batch_idx: int) -> T.Tensor:
+    def training_step(self, data: dict, batch_idx: int) -> T.Tensor:
         return self._shared_step(data, batch_idx, "train")
 
-    def validation_step(self, data: tuple, batch_idx: int) -> T.Tensor:
+    def validation_step(self, data: dict, batch_idx: int) -> T.Tensor:
         return self._shared_step(data, batch_idx, "valid")
 
     def configure_optimizers(self) -> dict:
@@ -220,8 +220,8 @@ class MaskedParticleModelling(pl.LightningModule):
 
     def on_fit_start(self) -> None:
         """Call the on_fit_start method for each task."""
-        for task in self.tasks:
-            task.on_fit_start()
+        for task in self.tasks.values():
+            task.on_fit_start(self)
 
     def on_train_epoch_end(self) -> None:
         """Create the pickled object for the backbone."""

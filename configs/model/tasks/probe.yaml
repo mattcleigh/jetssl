@@ -1,0 +1,13 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=probe
+probe:
+  _target_: src.models.mpm_tasks.ProbeTask
+  _partial_: True
+
+  weight: 1.0
+  detach: True # Do not backpropagate through the probe
+  apply_every: 50 # Apply the probe every 50 steps
+
+  defaults:
+    - _self_
+    - /model/class_head@class_head: ca.yaml
+

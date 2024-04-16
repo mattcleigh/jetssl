@@ -56,6 +56,7 @@ class JetHDFBase:
         path: str,
         features: list[tuple],
         n_classes: int,
+        csts_dim: int | None = None,
         processes: list | str = "all",
         n_files: int | list | None = None,
         n_jets: int | list | None = None,
@@ -96,6 +97,17 @@ class JetHDFBase:
             n_jets = n_jets_total // len(processes)
         if isinstance(n_jets, int) or n_jets is None:
             n_jets = [n_jets] * len(processes)
+
+        # Insert the csts dim into the features
+        # This is a hack but we need the csts to change with hydra for now
+        if csts_dim is not None:
+            print("Warning! Explicitly setting the csts dimension")
+            print("This is a hack and should be removed in the future!")
+            c_idx = [i for i, f in enumerate(features) if f[0] == "csts"][0]
+            curr = features[c_idx][-1]
+            features[c_idx][-1] = [curr, [csts_dim]]
+            print("New feature slice for csts:")
+            print(features[c_idx])
 
         # Class attributes
         self.path = Path(path)
