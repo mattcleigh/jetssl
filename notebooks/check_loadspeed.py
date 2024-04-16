@@ -1,5 +1,6 @@
 from functools import partial
 
+import joblib
 import rootutils
 
 root = rootutils.setup_root(search_from=".", pythonpath=True)
@@ -8,14 +9,13 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.datamodules.collation import collate_with_fn, minimize_padding
-from src.datamodules.hdf import JetIterable
+from src.datamodules.collation import batch_preprocess_impact
+from src.datamodules.hdf import JetMappable
 from src.datamodules.masking import random_masking
 from src.datamodules.transforms import (
     apply_masking,
     compose,
     log_squash_csts_pt,
-    tanh_d0_dz,
 )
 
 torch.utils.data._utils.MP_STATUS_CHECK_INTERVAL = 600
@@ -34,47 +34,35 @@ features = [
 pipeline = partial(
     compose,
     transforms=[
-        log_squash_csts_pt,
-        tanh_d0_dz,
         partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5)),
+        log_squash_csts_pt,
     ],
 )
 
-data = JetIterable(
+data = JetMappable(
     path="/srv/fast/share/rodem/JetClassH5/train_100M/",
     features=features,
-    processes="all",
-    n_classes=10,
+    n_files=1,
+    processes="TTBar",
+    n_classes=1,
     transforms=pipeline,
-    shuffle=True,
 )
 
 loader = DataLoader(
     data,
     batch_size=1024,
-    num_workers=2,
-    collate_fn=partial(collate_with_fn, fn=minimize_padding),
+    num_workers=4,
+    shuffle=True,
+    collate_fn=partial(
+        batch_preprocess_impact,
+        fn=joblib.load(root / "src/datamodules/impact_processor.joblib"),
+    ),
 )
 
 # Cycle through the batches
-avg_cardinality = 0
-pbar = tqdm(loader)
-for n_batches, batch in enumerate(pbar):
+for batch in tqdm(loader):
     # Unpack the batch
     csts = batch["csts"]
     csts_id = batch["csts_id"]
     labels = batch["labels"]
     mask = batch["mask"]
-    null_mask = batch["null_mask"]
-
-    # Update the average batch size
-    avg_cardinality = (avg_cardinality * (n_batches - 1) + csts.shape[1]) / n_batches
-
-    # Check the contents
-    assert csts.shape[0] == csts_id.shape[0] == mask.shape[0], "Batch size mismatch"
-    assert mask.sum(-1).min() > 0, "Events with 0 real nodes"
-    assert (
-        mask.sum(-1) - null_mask.sum(-1)
-    ).min() > 0, "Events where everything was dropped"
-
-    pbar.set_description(f"Average cardinality: {avg_cardinality:.2f}")

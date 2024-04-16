@@ -43,6 +43,7 @@ def random_masking(
     mask_fraction: float = 0.5,
     seed: int | None = None,
 ) -> np.ndarray:
+    """Randomly drop a fraction of the jet based on the total number of constituents."""
     # Create the random number generator, the number to drop and the mask
     rng = np.random.default_rng(seed)
     max_drop = np.floor(mask_fraction * mask.sum()).astype(int)
@@ -73,6 +74,7 @@ def knn_masking(
     mask_fraction: float = 0.3,
     seed: int | None = None,
 ) -> np.ndarray:
+    """Iteratively remove nodes and its knns."""
     # Default slice
     if pos_dims is None:
         pos_dims = slice(1, 3)
@@ -122,6 +124,7 @@ def radius_masking(
     mask_fraction: float = 0.3,
     seed: int | None = None,
 ) -> np.ndarray:
+    """Iteratively remove nodes and those within a radius."""
     # Default slice
     if pos_dims is None:
         pos_dims = slice(1, 3)

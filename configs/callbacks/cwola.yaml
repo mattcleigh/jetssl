@@ -1,0 +1,22 @@
+backbone_finetune:
+  _target_: src.models.finetuning.CatchupToLR
+  unfreeze_at_step: 5000
+  catchup_steps: 5000
+
+# CWoLa training means we train right to the end
+# No early stopping, best model is always the last
+latest_checkpoint:
+  _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${paths.full_path}/checkpoints
+  filename: best
+  save_weights_only: True
+  auto_insert_metric_name: False
+  enable_version_counter: False
+
+model_summary:
+  _target_: pytorch_lightning.callbacks.RichModelSummary
+  max_depth: 2
+
+lr_monitor:
+  _target_: pytorch_lightning.callbacks.LearningRateMonitor
+  logging_interval: step

@@ -4,18 +4,18 @@ import rootutils
 
 root = rootutils.setup_root(search_from=".", pythonpath=True)
 
+import joblib
 import numpy as np
 from torch.utils.data import DataLoader
 
 from mltools.mltools.plotting import plot_multi_hists
-from src.datamodules.collation import collate_with_fn, minimize_padding
+from src.datamodules.collation import batch_preprocess_impact
 from src.datamodules.hdf import JC_CLASS_TO_LABEL, JetMappable
 from src.datamodules.masking import random_masking
 from src.datamodules.transforms import (
     apply_masking,
     compose,
     log_squash_csts_pt,
-    tanh_d0_dz,
 )
 
 # Define the type of information to load into the dict from the HDF files
@@ -31,9 +31,8 @@ features = [
 pipeline = partial(
     compose,
     transforms=[
-        log_squash_csts_pt,
-        tanh_d0_dz,
         partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5)),
+        log_squash_csts_pt,
     ],
 )
 
@@ -57,6 +56,7 @@ jc_data = JetMappable(
     transforms=pipeline,
 )
 jc_labels = list(JC_CLASS_TO_LABEL.keys())
+cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
 
 
 # Split the datasets into seperate lists based on the labels
@@ -74,7 +74,6 @@ sh_csts = csts_per_class(sh_data, sh_labels)
 jc_csts = csts_per_class(jc_data, jc_labels)
 
 # Plot distributions of the constituents for each class
-cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
 plot_multi_hists(
     data_list=list(sh_csts.values()),
     data_labels=list(sh_csts.keys()),
@@ -110,12 +109,16 @@ plot_multi_hists(
 # Define dataloaders which will apply the preprocessing pipeline
 sh_data.transforms = pipeline
 jc_data.transforms = pipeline
+collate_fn = partial(
+    batch_preprocess_impact,
+    fn=joblib.load(root / "src/datamodules/impact_processor.joblib"),
+)
 sh_loader = DataLoader(
     sh_data,
     batch_size=10_000,
     num_workers=0,
     shuffle=True,
-    collate_fn=partial(collate_with_fn, fn=minimize_padding),
+    collate_fn=collate_fn,
 )
 
 jc_loader = DataLoader(
@@ -123,7 +126,7 @@ jc_loader = DataLoader(
     batch_size=10_000,
     num_workers=0,
     shuffle=True,
-    collate_fn=partial(collate_with_fn, fn=minimize_padding),
+    collate_fn=collate_fn,
 )
 
 # Plot the first batch
@@ -140,8 +143,3 @@ plot_multi_hists(
     path=root / "plots/batch.png",
     do_norm=True,
 )
-
-# Get the id of the constituents with d0 = 0
-jc_csts_id = jc_dict["csts_id"][jc_dict["mask"]]
-d0_is_zero = jc_csts[..., -4] == 0
-print(jc_csts_id[d0_is_zero])

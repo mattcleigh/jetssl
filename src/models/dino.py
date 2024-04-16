@@ -1,3 +1,4 @@
+import random
 from functools import partial
 
 import pytorch_lightning as pl
@@ -84,34 +85,6 @@ class DINOv2Loss(nn.Module):
         return -(t_centered * s_lsm).sum(dim=-1).mean()
 
 
-def mean_entropy(x: T.Tensor, temp: float = 0.1) -> T.Tensor:
-    """The average entropy of a batch of logits."""
-    marginal = softmax(x / temp, dim=-1).mean(dim=0)
-    return (marginal ** (-marginal)).log().sum()
-
-
-@T.autocast("cuda", enabled=False)
-def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
-    """Kozachenko-Leonenko entropic loss regularizer.
-
-    From Sablayrolles et al. - 2018 - Spreading vectors for similarity search
-    """
-    # Normalize the input
-    x = normalize(x, eps=eps, dim=-1)
-
-    # Calculate the matching pair idxes via the max inner produce
-    with T.no_grad():
-        dots = T.mm(x, x.t())
-        dots.view(-1)[:: (x.shape[0] + 1)].fill_(-1)  # Fill the diagonal with -1
-        min_idx = T.argmax(dots, dim=1)
-
-    # Get the distance between closest pairs
-    distances = pairwise_distance(x, x[min_idx])
-
-    # Return the kozachenko-leonenko entropy
-    return -T.log(distances + eps).mean()
-
-
 class DINOHead(nn.Module):
     """The projection head for DINO-v2.
 
@@ -151,6 +124,28 @@ class DINOHead(nn.Module):
         return self.last_layer(x)
 
 
+@T.autocast("cuda", enabled=False)
+def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
+    """Kozachenko-Leonenko entropic loss regularizer.
+
+    From Sablayrolles et al. - 2018 - Spreading vectors for similarity search
+    """
+    # Normalize the input
+    x = normalize(x, eps=eps, dim=-1)
+
+    # Calculate the matching pair idxes via the max inner produce
+    with T.no_grad():
+        dots = T.mm(x, x.t())
+        dots.view(-1)[:: (x.shape[0] + 1)].fill_(-1)  # Fill the diagonal with -1
+        min_idx = T.argmax(dots, dim=1)
+
+    # Get the distance between closest pairs
+    distances = pairwise_distance(x, x[min_idx])
+
+    # Return the kozachenko-leonenko entropy
+    return -T.log(distances + eps).mean()
+
+
 class JetDINO(pl.LightningModule):
     """Dino-v2 (really iBOT) model for jets."""
 
@@ -164,7 +159,7 @@ class JetDINO(pl.LightningModule):
         scheduler: dict,
         class_head: partial,
         embed_dim: int = 4096,
-        t_ema: float = 0.998,
+        t_ema: float = 0.992,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -227,46 +222,39 @@ class JetDINO(pl.LightningModule):
         inv_mask = mask & ~null_mask
 
         # Pass through the student model with dropped nodes under both configs
-        _cls_s1, x_s1 = self.mask_and_encode(normed_csts, csts_id, mask, null_mask)
-        _cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
+        cls_s1, x_s1 = self.mask_and_encode(normed_csts, csts_id, mask, null_mask)
+        cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
 
         # Pass through the teacher model without dropping
+        # We want to keep the raw backbone output for the probe
         with set_eval(self), T.no_grad():
             e_t, e_mask = self.pass_teacher(normed_csts, csts_id, mask)
-            x_t = self.t_projector(e_t)[:, self.t_encoder.num_registers :]
-            # cls_t = w_t[:, 0]
-            # x_t = x_t[:, self.t_encoder.num_registers :]
+            w_t = self.t_projector(e_t)
+            cls_t = w_t[:, 0]
+            x_t = w_t[:, self.t_encoder.num_registers :]
 
         # Get the dino losses for the class tokens using both student views
-        # loss_dino = dino_loss(cls_s1, cls_t)
-        # loss_dino += dino_loss(cls_s2, cls_t)
+        loss_dino = self.dino_loss(cls_s1, cls_t)
+        loss_dino += self.dino_loss(cls_s2, cls_t)
 
         # Get the ibot losses for the constituent using both student views
-        loss_ibot = self.dino_loss(x_s1[mask], x_t[mask])
-        loss_ibot += self.dino_loss(x_s2[mask], x_t[mask])
-
-        # Get the regularisation loss (we want to maximise the entropy)
-        # reg_cls = -mean_entropy(cls_s1)
-        # reg_cls += -mean_entropy(cls_s2)
-        # reg_csts = -mean_entropy(x_s1[mask])
-        # reg_csts += -mean_entropy(x_s2[mask])
+        # Ibot losses only happen half the time
+        if random.random() < 0.5:
+            loss_ibot = self.dino_loss(x_s1[mask], x_t[mask])
+            loss_ibot += self.dino_loss(x_s2[mask], x_t[mask])
+        else:
+            loss_ibot = T.zeros(1, device=self.device)
 
         # Do an intervention for the loss sometimes being NaN
-        # if T.isnan(loss_dino):
-        #     loss_dino = T.zeros(1, device=self.device)
-        #     print("Intervention: loss_dino was NaN")
+        if T.isnan(loss_dino):
+            loss_dino = T.zeros(1, device=self.device)
+            print("Intervention: loss_dino was NaN")
         if T.isnan(loss_ibot):
             loss_ibot = T.zeros(1, device=self.device)
             print("Intervention: loss_ibot was NaN")
-        # if T.isnan(reg_cls):
-        # reg_cls = T.zeros(1, device=self.device)
-        # print("Intervention: reg_cls was NaN")
-        # if T.isnan(reg_csts):
-        #     reg_csts = T.zeros(1, device=self.device)
-        #     print("Intervention: reg_csts was NaN")
 
         # Combine the losses
-        total_loss = loss_ibot
+        total_loss = loss_dino + loss_ibot
 
         # Perform the ema updates (training only)
         if self.training:
@@ -276,9 +264,9 @@ class JetDINO(pl.LightningModule):
             ema_param_sync(self.projector, self.t_projector, self.t_ema)
 
         # Measure the occupancy of the teacher outputs
-        # cls_occ = T.unique(T.argmax(cls_t, dim=-1)).size(0) / self.embed_dim
+        cls_occ = T.unique(T.argmax(cls_t, dim=-1)).size(0) / self.embed_dim
         x_occ = T.unique(T.argmax(x_t[mask], dim=-1)).size(0) / self.embed_dim
-        # self.log(f"{prefix}/cls_occ", cls_occ)
+        self.log(f"{prefix}/cls_occ", cls_occ)
         self.log(f"{prefix}/x_occ", x_occ)
 
         # Dont run probe too often as we must be fair to MPM!
@@ -292,10 +280,8 @@ class JetDINO(pl.LightningModule):
 
         # Log the metrics
         self.log(f"{prefix}/total_loss", total_loss)
-        # self.log(f"{prefix}/dino_loss", loss_dino)
+        self.log(f"{prefix}/dino_loss", loss_dino)
         self.log(f"{prefix}/ibot_loss", loss_ibot)
-        # self.log(f"{prefix}/reg_loss", reg_cls)
-        # self.log(f"{prefix}/reg_loss", reg_csts)
         return total_loss
 
     def mask_and_encode(

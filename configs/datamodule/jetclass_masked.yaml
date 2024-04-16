@@ -23,3 +23,9 @@ loader_config:
   num_workers: 3 # Speed testing show that 3 workers is enough even with augs
   drop_last: false
   shuffle: true
+  collate_fn:
+    _target_: src.datamodules.collation.batch_preprocess_impact
+    _partial_: true
+    fn:
+      _target_: joblib.load
+      filename: ${paths.root_dir}/src/datamodules/impact_processor.joblib

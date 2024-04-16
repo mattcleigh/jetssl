@@ -1,9 +1,13 @@
 import torch as T
+from sklearn.base import BaseEstimator
 from torch.utils.data.dataloader import default_collate
 
 
-def minimize_padding(jet_dict: dict) -> dict:
+def minimize_padding(batch: list) -> dict:
     """Given a batch of jets, compress the relevant tensors to minimise the padding."""
+    # Always run the default collate function first
+    jet_dict = default_collate(batch)
+
     if "mask" not in jet_dict:
         return jet_dict
 
@@ -40,6 +44,30 @@ def minimize_padding(jet_dict: dict) -> dict:
     return jet_dict
 
 
-def collate_with_fn(batch: list, fn: callable) -> dict:
-    """Run an extra function on the batch after collation."""
-    return fn(default_collate(batch))
+def batch_preprocess_impact(batch: list, fn: BaseEstimator) -> dict:
+    """Preprocess the badly bahaved impact parameters of the jets."""
+    # Always run the default collate function first
+    jet_dict = default_collate(batch)
+
+    # Check that the required keys are present
+    assert all(k in jet_dict for k in ["csts", "csts_id", "mask"])
+
+    # If there are no impact parameters to reshape, skip
+    if jet_dict["csts"].shape[-1] < 7:
+        return jet_dict
+
+    # Pass the constituent impact parameters through the preprocessor
+    csts = jet_dict["csts"]
+    mask = jet_dict["mask"]
+
+    # Replace the impact parameters with the new values
+    csts[..., -4:][mask] = T.from_numpy(fn.transform(csts[mask][:, -4:])).float()
+
+    # Replace the neutral particles with gaussian noise
+    # They are zero padded anyway so contain no information!!!
+    neutral_mask = mask & (jet_dict["csts_id"] == 0) | (jet_dict["csts_id"] == 2)
+    csts[..., -4:][neutral_mask] = T.randn_like(csts[..., -4:][neutral_mask])
+
+    # Replace with the new constituents
+    jet_dict["csts"] = csts
+    return jet_dict

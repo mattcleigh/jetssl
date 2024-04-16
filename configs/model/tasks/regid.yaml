@@ -1,0 +1,3 @@
+defaults:
+ - reg.yaml
+ - id.yaml

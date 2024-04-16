@@ -4,7 +4,7 @@
 defaults:
   - _self_
   - trainer: default.yaml
-  - model: mpmreg.yaml
+  - model: mpm.yaml
   - datamodule: jetclass_masked.yaml
   - loggers: default.yaml
   - hydra: default.yaml

@@ -1,0 +1,5 @@
+_target_: mltools.mltools.lightning_utils.linear_warmup_exp_decay
+_partial_: true
+warmup_steps: 50000
+half_life: 100_000
+min_factor: 0.001

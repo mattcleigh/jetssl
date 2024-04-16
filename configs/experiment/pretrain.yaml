@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  # - /model/tasks/id
+  - /model/tasks/reg
+  - /model/tasks/kmeans
+  # - /model/tasks/diff
+  # - /model/tasks/flow
+  # - /model/tasks/probe
+  - override /datamodule: jetclass_masked
+  - override /model: mpm
+
+model:
+  do_mae: False
+  use_id: False
+
+# Allows us to use the partially mappable datasets
+trainer:
+  max_epochs: -1 # Run indefinitely
+  reload_dataloaders_every_n_epochs: 5
+  check_val_every_n_epoch: 5
+
+# Model modifications
+project_name: jetssl2
+network_name: mpm

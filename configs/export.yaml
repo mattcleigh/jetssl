@@ -6,5 +6,5 @@ defaults:
   - _self_
 
 project_name: jetssl_finetune
-network_name: vertexer
+network_name: cwola_50000
 ckpt_flag: best.ckpt

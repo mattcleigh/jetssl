@@ -1,8 +1,6 @@
 _target_: src.datamodules.hdf.JetMappable
 _partial_: True
 n_classes: 10
-features:
-- [csts, f, [128]]
-- [mask, bool, [128]]
-- [csts_id, l, [128]]
-- [labels, l, null]
+
+defaults:
+  - features: default.yaml

@@ -1,9 +1,0 @@
-_target_: src.models.classifier.Classifier
-
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl/backbones/untrained.pkl
-
-defaults:
-  - _self_
-  - optimizer: default.yaml
-  - scheduler: warmup.yaml
-  - class_head: ca.yaml

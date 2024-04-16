@@ -1,11 +1,9 @@
 _target_: src.datamodules.hdf.JetCWola
 _partial_: True
-num_signal: 50_000
+num_signal: 100_000
 num_background: 1000_000
 signal_process: TTBar
 background_process: ZJetsToNuNu
-features:
-- [csts, f, [128]]
-- [mask, bool, [128]]
-- [csts_id, l, [128]]
-- [labels, l, null]
+
+defaults:
+  - features: default.yaml

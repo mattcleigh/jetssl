@@ -17,11 +17,14 @@ mask: np.ndarray
 from copy import deepcopy
 
 import numpy as np
+from sklearn.base import BaseEstimator
 
 from mltools.mltools.numpy_utils import log_squash
 
+rng = np.random.default_rng()
 
-def apply_augmentation(jet_dict: dict, augmentation: callable) -> tuple:
+
+def apply_augmentation(jet_dict: dict, augmentation: callable) -> dict:
     """Returns a new augmented copy of the jet dict."""
     assert all(k in jet_dict for k in ["csts", "mask"])
     new_csts, new_mask = augmentation(jet_dict["csts"], jet_dict["mask"])
@@ -30,19 +33,19 @@ def apply_augmentation(jet_dict: dict, augmentation: callable) -> tuple:
     return jet_dict
 
 
-def get_augmented_twins(jet_dict: dict, augmentation: callable) -> tuple:
+def get_augmented_twins(jet_dict: dict, augmentation: callable) -> dict:
     """Creates an augmented copy of the jet dict returns both."""
     return jet_dict, apply_augmentation(jet_dict, augmentation)
 
 
-def apply_masking(jet_dict: tuple, masking_fn: callable) -> tuple:
+def apply_masking(jet_dict: dict, masking_fn: callable) -> dict:
     """Applies a masking function to the jet tuple."""
     assert all(k in jet_dict for k in ["csts", "mask"])
     jet_dict["null_mask"] = masking_fn(jet_dict["csts"], jet_dict["mask"])
     return jet_dict
 
 
-def jitter_neutral_impact(jet_dict: tuple) -> np.ndarray:
+def jitter_neutral_impact(jet_dict: dict) -> dict:
     """Add noise to the impact parameters of neutral particles."""
     assert all(k in jet_dict for k in ["csts", "csts_id", "mask"])
     assert jet_dict["csts"].shape[-1] >= 4, "Expected at least 4 features in the csts"
@@ -53,7 +56,6 @@ def jitter_neutral_impact(jet_dict: tuple) -> np.ndarray:
     n_neut = np.sum(neutral_mask)
 
     # Add noise to the impact parameters (last 4 parameters of the csts)
-    rng = np.random.default_rng()
     csts = jet_dict["csts"]
     csts[neutral_mask, -4:] = rng.normal(0, 0.3, (n_neut, 4))
 
@@ -65,14 +67,14 @@ def jitter_neutral_impact(jet_dict: tuple) -> np.ndarray:
     return jet_dict
 
 
-def log_squash_csts_pt(jet_dict: tuple) -> np.ndarray:
+def log_squash_csts_pt(jet_dict: dict) -> dict:
     """Squashes the pt of the constituents using a log function."""
     assert "csts" in jet_dict
     jet_dict["csts"][..., 0] = log_squash(jet_dict["csts"][..., 0])
     return jet_dict
 
 
-def drop_d0(jet_dict: tuple, max_val: float = 10) -> np.ndarray:
+def drop_d0(jet_dict: dict, max_val: float = 10) -> dict:
     """Drop if the d0 is greater than a certain value."""
     assert all(k in jet_dict for k in ["csts", "mask"])
     assert jet_dict["csts"].shape[-1] >= 4, "Expected at least 4 features in the csts"
@@ -82,12 +84,31 @@ def drop_d0(jet_dict: tuple, max_val: float = 10) -> np.ndarray:
     return jet_dict
 
 
-def tanh_d0_dz(jet_dict: tuple) -> np.ndarray:
+def tanh_d0_dz(jet_dict: dict) -> dict:
     """Squashes the d0 and dz of the constituents using a tanh function."""
     assert "csts" in jet_dict
     assert jet_dict["csts"].shape[-1] >= 6, "Expected at least 6 features in the csts"
     jet_dict["csts"][..., 3] = np.tanh(jet_dict["csts"][..., 3])
     jet_dict["csts"][..., 5] = np.tanh(jet_dict["csts"][..., 5])
+    return jet_dict
+
+
+def preprocess_impact(jet_dict: dict, fn: BaseEstimator) -> dict:
+    """Add noise to the impact parameters of neutral particles."""
+    assert all(k in jet_dict for k in ["csts", "csts_id", "mask"])
+    assert jet_dict["csts"].shape[-1] >= 4, "Expected at least 4 features in the csts"
+
+    # Pass the constituent impact parameters through the preprocessor
+    csts = jet_dict["csts"]
+    mask = jet_dict["mask"]
+    csts[..., -4:] = fn.transform(csts[..., -4:])
+
+    # Replace the neutral particles with gaussian noise
+    neutral_mask = mask & (jet_dict["csts_id"] == 0) | (jet_dict["csts_id"] == 2)
+    csts[neutral_mask, -4:] = rng.standard_normal((np.sum(neutral_mask), 4))
+
+    # Replace with the new constituents
+    jet_dict["csts"] = csts
     return jet_dict
 
 

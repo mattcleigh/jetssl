@@ -13,18 +13,21 @@ from mltools.mltools.torch_utils import to_np
 CSTS_ID = 8
 
 
-def plot_labels(
-    csts_id: T.Tensor,
-    mask: T.Tensor,
-    null_mask: T.Tensor,
-    rec_csts_id: T.Tensor,
-    n_samples: int = 5,
-) -> None:
+def plot_labels(data: dict, pred: T.Tensor, n_samples: int = 5) -> None:
+    # Unpack the data
+    csts_id = data["csts_id"]
+    mask = data["mask"]
+    null_mask = data["null_mask"]
+
+    # Create a copy of the csts_id tensor with the predicted values
+    pred_csts_id = csts_id.clone()
+    pred_csts_id[null_mask] = pred
+
     # Convert all the tensors to numpy
     csts_id = to_np(csts_id)
     mask = to_np(mask)
     null_mask = to_np(null_mask)
-    rec_csts_id = to_np(rec_csts_id)
+    pred_csts_id = to_np(pred_csts_id)
 
     # Cycle through the batch
     for b in range(min(csts_id.shape[0], n_samples)):
@@ -32,7 +35,7 @@ def plot_labels(
         c = csts_id[b]
         m = mask[b]
         nm = null_mask[b]
-        rc = rec_csts_id[b]
+        rc = pred_csts_id[b]
 
         # Split the features into the original, survived and sampled
         original = c[m]
@@ -63,6 +66,12 @@ def plot_labels(
             label="Sampled",
             zorder=-1,
         )
+
+        # Get the highest value to set the yscale
+        max_val = max([o_hist.max(), s_hist.max(), p_hist.max()])
+        ax.set_ylim(0, max_val * 1.6)
+        ax.set_xlim(0, 8)
+
         ax.legend()
         ax.set_xlabel("Constituent Type")
         fig.tight_layout()
@@ -70,23 +79,31 @@ def plot_labels(
         img = PIL.Image.frombytes(
             "RGB", fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
         )
-        wandb.log({f"jet_class_{b}": wandb.Image(img)}, commit=False)
+        if wandb.run is not None:
+            wandb.log({f"jet_class_{b}": wandb.Image(img)}, commit=False)
         plt.close()
 
 
 def plot_continuous(
-    csts: T.Tensor,
-    mask: T.Tensor,
-    null_mask: T.Tensor,
-    rec_csts: T.Tensor,
+    data: dict,
+    pred: T.Tensor,
     n_samples: int = 5,
 ) -> None:
     """Plot the original, survived and sampled continuous features of the jets."""
+    # Unpack the sample
+    csts = data["csts"]
+    mask = data["mask"]
+    null_mask = data["null_mask"]
+
+    # Create a copy of the csts_id tensor with the predicted values
+    pred_csts = csts.clone()
+    pred_csts[null_mask] = pred
+
     # Convert all the tensors to numpy
     csts = to_np(csts)
     mask = to_np(mask)
     null_mask = to_np(null_mask)
-    rec_csts = to_np(rec_csts)
+    pred_csts = to_np(pred_csts)
 
     # Cycle through the batch
     for b in range(min(csts.shape[0], n_samples)):
@@ -94,7 +111,7 @@ def plot_continuous(
         c = csts[b]
         m = mask[b]
         nm = null_mask[b]
-        rc = rec_csts[b]
+        rc = pred_csts[b]
 
         # Split the features into the original, survived and sampled
         original = c[m]
@@ -103,9 +120,39 @@ def plot_continuous(
 
         # Create the figure and axes
         fig, axes = plt.subplots(1, csts.shape[-1], figsize=(2 * csts.shape[-1], 3))
+        labels = [
+            r"$\log(p_T+1)$",
+            r"$\eta$",
+            r"$\phi$",
+            r"$d0_\text{normed}$",
+            r"$z0_\text{normed}$",
+            r"Err$(d0_\text{normed})$",
+            r"Err$(z0_\text{normed})$",
+        ]
+        limits = [
+            (0, 6),
+            (
+                -0.8,
+                0.8,
+            ),
+            (
+                -0.8,
+                0.8,
+            ),
+            (-3, 3),
+            (-3, 3),
+            (-3, 3),
+            (-3, 3),
+        ]
 
         # Cycle through the features
         for i, ax in enumerate(axes):
+            # Create the bins and clip to include overflow/underflow
+            bins = np.linspace(limits[i][0], limits[i][1], 11)
+            original[:, i] = np.clip(original[:, i], limits[i][0], limits[i][1])
+            survived[:, i] = np.clip(survived[:, i], limits[i][0], limits[i][1])
+            sampled[:, i] = np.clip(sampled[:, i], limits[i][0], limits[i][1])
+
             # Plot the histogram of the original jets
             o_hist, bins = np.histogram(original[:, i], bins=11)
             ax.stairs(o_hist, bins, color="k", label="Original")
@@ -126,12 +173,18 @@ def plot_continuous(
                 label="Sampled",
                 zorder=-1,
             )
+            ax.set_xlabel(labels[i])
+
+            # Get the highest value to set the yscale
+            max_val = max([o_hist.max(), s_hist.max(), p_hist.max()])
+            ax.set_ylim(0, max_val * 1.6)
+
         ax.legend()
-        axes[0].set_yscale("log")
         fig.tight_layout()
         fig.savefig(f"plots/jet_{b}")
         img = PIL.Image.frombytes(
             "RGB", fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
         )
-        wandb.log({f"jet_{b}": wandb.Image(img)}, commit=False)
+        if wandb.run is not None:
+            wandb.log({f"jet_{b}": wandb.Image(img)}, commit=False)
         plt.close()

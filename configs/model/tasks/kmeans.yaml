@@ -1,0 +1,16 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=kmeans
+kmeans:
+  _target_: src.models.mpm_tasks.KmeansTask
+  _partial_: True
+
+  weight: 1.0
+  detach: False
+  apply_every: 1
+
+  embed_dim: 128
+
+  kmeans_config:
+    n_clusters: 8192
+    max_iter: 500
+    verbose: 2
+

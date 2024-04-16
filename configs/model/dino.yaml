@@ -1,0 +1,14 @@
+_target_: src.models.dino.JetDINO
+
+embed_dim: 8192
+
+encoder_config:
+  layer_config:
+    layerscale_init: 1.0e-1 # Not too stong else CLS token is degenerate
+
+defaults:
+  - encoder_config: small.yaml
+  - optimizer: default.yaml
+  - scheduler: warmup_decay.yaml
+  - class_head: ca.yaml
+  - _self_

@@ -1,0 +1,24 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=flow
+flow:
+  _target_: src.models.mpm_tasks.FlowTask
+  _partial_: True
+
+  weight: 1.0
+  detach: False
+  apply_every: 1
+
+  embed_dim: 128
+
+  flow_config:
+    num_stacks: 6
+    mlp_width: 64
+    mlp_depth: 2
+    mlp_act: SiLU
+    tail_bound: 4.0
+    dropout: 0.0
+    num_bins: 8
+    do_lu: False
+    init_identity: True
+    do_norm: False
+    flow_type: coupling
+
