@@ -17,8 +17,8 @@ def main() -> None:
         n_cpus=1,
         gpu_type="ampere",
         vram_per_gpu=20,
-        time_hrs=1,
-        mem_gb=1,
+        time_hrs=12,
+        mem_gb=40,
         opt_dict={
             "network_name": [
                 "mpm-reg-3-noID-BERT-0reg",
