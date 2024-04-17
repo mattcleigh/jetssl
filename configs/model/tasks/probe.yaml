@@ -7,7 +7,7 @@ probe:
   detach: True # Do not backpropagate through the probe
   apply_every: 50 # Apply the probe every 50 steps
 
-  defaults:
-    - _self_
-    - /model/class_head@class_head: ca.yaml
+defaults:
+  - _self_
+  - /model/class_head@class_head: ca.yaml
 

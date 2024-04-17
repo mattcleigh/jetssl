@@ -1,16 +1,17 @@
 from functools import partial
 
 import rootutils
+from tqdm import tqdm
 
 root = rootutils.setup_root(search_from=".", pythonpath=True)
 
+import torch as T
 from joblib import dump
 from sklearn.preprocessing import QuantileTransformer
+from torch.utils.data import DataLoader
 
 from src.datamodules.hdf import JetMappable
-from src.datamodules.masking import random_masking
 from src.datamodules.transforms import (
-    apply_masking,
     compose,
     log_squash_csts_pt,
     tanh_d0_dz,
@@ -30,7 +31,6 @@ pipeline = partial(
     transforms=[
         log_squash_csts_pt,
         tanh_d0_dz,
-        partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5)),
     ],
 )
 
@@ -43,39 +43,38 @@ jc_data = JetMappable(
     transforms=pipeline,
 )
 
+jc_loader = DataLoader(
+    jc_data,
+    batch_size=10_000,
+    num_workers=0,
+)
+
 # Get the arrays
-jc_data.data_dict = jc_data.data_dict
-csts = jc_data.data_dict["csts"]
-mask = jc_data.data_dict["mask"]
-csts_id = jc_data.data_dict["csts_id"]
+csts = []
+csts_id = []
+for data in tqdm(jc_loader):
+    csts.append(data["csts"][data["mask"]])
+    csts_id.append(data["csts_id"][data["mask"]])
+csts = T.vstack(csts)
+csts_id = T.hstack(csts_id)
 
-# Get the charged particles
-charged_mask = mask & ((csts_id != 0) & (csts_id != 2))
-charged = csts[..., -4:][charged_mask]  # We only want the impact parameters
+# Replace the neutral impact parameters with NaNs (so they are disregarded in the fit)
+neut_mask = (csts_id == 0) | (csts_id == 2)
+csts[:, -4:][neut_mask] = T.nan
 
-import numpy as np
-
-len(np.unique(charged[:, 1]))
-
-# Make a quantile transformer for the charged particles
+# Make a quantile transformer
 qt = QuantileTransformer(output_distribution="normal", n_quantiles=1000)
-qt.fit(charged)
-dump(qt, "impact_processor.joblib")
+qt.fit(csts)
+dump(qt, "processor.joblib")
 
-# Check how fast the transformation is
-import time
-
-ts = time.time()
-transformed = qt.transform(charged[:1000_000])
+# Check how the transformation worked (just plot the neutrals particles)
+transformed = qt.transform(csts[~neut_mask][:1000_000])
 from mltools.mltools.plotting import plot_multi_hists
 
 plot_multi_hists(
     transformed,
     data_labels=["transformed"],
-    col_labels=["d0", "dz", "d0_err", "dz_err"],
+    col_labels=["pt", "eta", "phi", "d0", "dz", "d0_err", "dz_err"],
     bins=100,
     path="transformed.png",
 )
-
-te = time.time()
-print(f"Time to fit the quantile transformer: {te - ts} s")
