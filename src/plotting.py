@@ -121,7 +121,7 @@ def plot_continuous(
         # Create the figure and axes
         fig, axes = plt.subplots(1, csts.shape[-1], figsize=(2 * csts.shape[-1], 3))
         labels = [
-            r"$\log(p_T+1)$",
+            r"$p_T$",
             r"$\eta$",
             r"$\phi$",
             r"$d0$",
@@ -133,13 +133,13 @@ def plot_continuous(
         # Cycle through the features
         for i, ax in enumerate(axes):
             # Create the bins and clip to include overflow/underflow
-            bins = np.linspace(-3, 3, 11)
+            bins = np.linspace(-3, 3, 21)
             original[:, i] = np.clip(original[:, i], bins[0], bins[-1])
             survived[:, i] = np.clip(survived[:, i], bins[0], bins[-1])
             sampled[:, i] = np.clip(sampled[:, i], bins[0], bins[-1])
 
             # Plot the histogram of the original jets
-            o_hist, bins = np.histogram(original[:, i], bins=11)
+            o_hist, _ = np.histogram(original[:, i], bins=bins)
             ax.stairs(o_hist, bins, color="k", label="Original")
 
             # Plot the histogram of the survived jets
@@ -159,6 +159,7 @@ def plot_continuous(
                 zorder=-1,
             )
             ax.set_xlabel(labels[i])
+            ax.set_xlim(-3, 3)
 
             # Get the highest value to set the yscale
             max_val = max([o_hist.max(), s_hist.max(), p_hist.max()])
