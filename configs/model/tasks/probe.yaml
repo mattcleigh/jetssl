@@ -9,5 +9,5 @@ probe:
 
 defaults:
   - _self_
-  - /model/class_head@class_head: ca.yaml
+  - /model/class_head@probe.class_head: ca.yaml
 

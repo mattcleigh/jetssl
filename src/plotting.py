@@ -97,7 +97,7 @@ def plot_continuous(
 
     # Create a copy of the csts_id tensor with the predicted values
     pred_csts = csts.clone()
-    pred_csts[null_mask] = pred
+    pred_csts[null_mask] = pred.type(pred_csts.dtype)
 
     # Convert all the tensors to numpy
     csts = to_np(csts)
@@ -111,7 +111,7 @@ def plot_continuous(
         c = csts[b]
         m = mask[b]
         nm = null_mask[b]
-        rc = pred_csts[b]
+        rc = pred_csts[b]  # reconstructed
 
         # Split the features into the original, survived and sampled
         original = c[m]
@@ -124,34 +124,19 @@ def plot_continuous(
             r"$\log(p_T+1)$",
             r"$\eta$",
             r"$\phi$",
-            r"$d0_\text{normed}$",
-            r"$z0_\text{normed}$",
-            r"Err$(d0_\text{normed})$",
-            r"Err$(z0_\text{normed})$",
-        ]
-        limits = [
-            (0, 6),
-            (
-                -0.8,
-                0.8,
-            ),
-            (
-                -0.8,
-                0.8,
-            ),
-            (-3, 3),
-            (-3, 3),
-            (-3, 3),
-            (-3, 3),
+            r"$d0$",
+            r"$z0$",
+            r"Err$(d0)$",
+            r"Err$(z0)$",
         ]
 
         # Cycle through the features
         for i, ax in enumerate(axes):
             # Create the bins and clip to include overflow/underflow
-            bins = np.linspace(limits[i][0], limits[i][1], 11)
-            original[:, i] = np.clip(original[:, i], limits[i][0], limits[i][1])
-            survived[:, i] = np.clip(survived[:, i], limits[i][0], limits[i][1])
-            sampled[:, i] = np.clip(sampled[:, i], limits[i][0], limits[i][1])
+            bins = np.linspace(-3, 3, 11)
+            original[:, i] = np.clip(original[:, i], bins[0], bins[-1])
+            survived[:, i] = np.clip(survived[:, i], bins[0], bins[-1])
+            sampled[:, i] = np.clip(sampled[:, i], bins[0], bins[-1])
 
             # Plot the histogram of the original jets
             o_hist, bins = np.histogram(original[:, i], bins=11)

@@ -26,8 +26,8 @@ loader_config:
   drop_last: true
   shuffle: true
   collate_fn:
-    _target_: src.datamodules.collation.batch_preprocess_impact
+    _target_: src.datamodules.preprocessing.batch_preprocess
     _partial_: true
     fn:
       _target_: joblib.load
-      filename: ${paths.root_dir}/src/datamodules/impact_processor.joblib
+      filename: ${paths.root_dir}/resources/preprocessor_all.joblib

@@ -1,0 +1,24 @@
+_target_: src.models.jepa.JetJEPA
+
+t_ema: 0.992
+
+predictor_config:
+  dim: 128
+  num_layers: 3
+  do_packed: True # Much faster training but requires half precision
+  do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
+  num_registers: 0 # NO registers. Already added before predictor.
+  do_final_norm: True
+  layer_config:
+    num_heads: 4
+    ff_mult: 2
+
+encoder_config:
+  do_final_norm: True
+
+defaults:
+  - encoder_config: small.yaml
+  - optimizer: default.yaml
+  - scheduler: warmup_decay.yaml
+  - class_head: ca.yaml
+  - _self_

@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /datamodule/jet_transforms/jepa@datamodule.train_set.transforms
+  - /datamodule/jet_transforms/jepa@datamodule.val_set.transforms
+  - /datamodule/jet_transforms/jepa@datamodule.test_set.transforms
+  - override /datamodule: jetclass_masked
+  - override /model: jepa
+
+# Smaller batch sizes - new preprocessor
+datamodule:
+  loader_config:
+    batch_size: 64
+
+# Allows us to use the partially mappable datasets
+trainer:
+  max_epochs: -1 # Run indefinitely
+  reload_dataloaders_every_n_epochs: 5
+  check_val_every_n_epoch: 5
+
+# Model modifications
+project_name: jetssl2
+network_name: jepa

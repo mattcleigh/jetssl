@@ -38,10 +38,10 @@ def get_augmented_twins(jet_dict: dict, augmentation: callable) -> dict:
     return jet_dict, apply_augmentation(jet_dict, augmentation)
 
 
-def apply_masking(jet_dict: dict, masking_fn: callable) -> dict:
+def apply_masking(jet_dict: dict, masking_fn: callable, key: str = "null_mask") -> dict:
     """Applies a masking function to the jet tuple."""
     assert all(k in jet_dict for k in ["csts", "mask"])
-    jet_dict["null_mask"] = masking_fn(jet_dict["csts"], jet_dict["mask"])
+    jet_dict[key] = masking_fn(jet_dict["csts"], jet_dict["mask"])
     return jet_dict
 
 

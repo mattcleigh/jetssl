@@ -2,17 +2,13 @@
 
 defaults:
   # - /model/tasks/id
-  - /model/tasks/reg
+  # - /model/tasks/reg
   - /model/tasks/kmeans
   # - /model/tasks/diff
   # - /model/tasks/flow
-  # - /model/tasks/probe
+  - /model/tasks/probe
   - override /datamodule: jetclass_masked
   - override /model: mpm
-
-model:
-  do_mae: False
-  use_id: False
 
 # Allows us to use the partially mappable datasets
 trainer:
