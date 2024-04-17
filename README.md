@@ -56,7 +56,7 @@ To run this project, follow these steps:
 3. Train
 * Run the training script with the desired configuration:
 ```
-python scripts/train.py experiment=train_mpm.yaml
+python scripts/train.py experiment=pretrain.yaml
 ```
 
 ## Docker and Gitlab

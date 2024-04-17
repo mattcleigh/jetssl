@@ -1,12 +1,15 @@
 # @package _global_
 
 defaults:
+  # Uncomment which tasks you want to run
+  ######################
   # - /model/tasks/id
   # - /model/tasks/reg
   - /model/tasks/kmeans
   # - /model/tasks/diff
   # - /model/tasks/flow
-  - /model/tasks/probe
+  - /model/tasks/probe # Keep this on for benchmarking
+  ######################
   - override /datamodule: jetclass_masked
   - override /model: mpm
 
