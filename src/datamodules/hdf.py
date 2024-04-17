@@ -54,7 +54,7 @@ class JetHDFBase:
         self,
         *,
         path: str,
-        features: list[tuple],
+        features: list[list],
         n_classes: int,
         csts_dim: int | None = None,
         processes: list | str = "all",

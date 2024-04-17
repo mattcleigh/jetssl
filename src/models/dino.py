@@ -16,7 +16,6 @@ from torch.nn.utils.parametrizations import weight_norm
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.modules import IterativeNormLayer
 from mltools.mltools.torch_utils import ema_param_sync, set_eval
 from mltools.mltools.transformers import Transformer
 from src.models.utils import MLP, JetBackbone
@@ -168,9 +167,6 @@ class JetDINO(pl.LightningModule):
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
 
-        # The normalisation layer (for the continuous features only)
-        self.normaliser = IterativeNormLayer(self.csts_dim)
-
         # The transformer encoder for the constituents
         self.encoder = Transformer(**encoder_config)
         self.t_encoder = Transformer(**encoder_config)
@@ -215,20 +211,17 @@ class JetDINO(pl.LightningModule):
         mask = sample["mask"]
         null_mask = sample["null_mask"]
 
-        # Normalise the continuous features and update the stats
-        normed_csts = self.normaliser(csts, mask)
-
         # Get the inverse mask so the student gets two views
         inv_mask = mask & ~null_mask
 
         # Pass through the student model with dropped nodes under both configs
-        cls_s1, x_s1 = self.mask_and_encode(normed_csts, csts_id, mask, null_mask)
-        cls_s2, x_s2 = self.mask_and_encode(normed_csts, csts_id, mask, inv_mask)
+        cls_s1, x_s1 = self.mask_and_encode(csts, csts_id, mask, null_mask)
+        cls_s2, x_s2 = self.mask_and_encode(csts, csts_id, mask, inv_mask)
 
         # Pass through the teacher model without dropping
         # We want to keep the raw backbone output for the probe
         with set_eval(self), T.no_grad():
-            e_t, e_mask = self.pass_teacher(normed_csts, csts_id, mask)
+            e_t, e_mask = self.pass_teacher(csts, csts_id, mask)
             w_t = self.t_projector(e_t)
             cls_t = w_t[:, 0]
             x_t = w_t[:, self.t_encoder.num_registers :]
@@ -270,7 +263,7 @@ class JetDINO(pl.LightningModule):
         self.log(f"{prefix}/x_occ", x_occ)
 
         # Dont run probe too often as we must be fair to MPM!
-        if batch_idx % 20 == 0 or prefix == "valid":
+        if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.classifier_head(e_t.detach(), mask=e_mask)
             probe_loss = cross_entropy(class_out, labels)
             total_loss += probe_loss
@@ -349,7 +342,6 @@ class JetDINO(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         """Create the pickled object for the backbone out of the teacher components."""
         backbone = JetBackbone(
-            normaliser=self.normaliser,
             ctst_embedder=self.t_ctst_embedder,
             id_embedder=self.t_csts_id_embedder,
             encoder=self.t_encoder,

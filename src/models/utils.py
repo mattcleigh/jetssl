@@ -10,17 +10,18 @@ from mltools.mltools.torch_utils import ema_param_sync
 
 
 class JetBackbone(nn.Module):
-    """Basic backbone for the jet models."""
+    """Generalised backbone for the jet models.
+
+    Easy for saving and loading using the pickle module.
+    """
 
     def __init__(
         self,
-        normaliser: nn.Module,
         csts_emb: nn.Module,
         csts_id_emb: nn.Module | None,
         encoder: nn.Module,
     ) -> None:
         super().__init__()
-        self.normaliser = normaliser
         self.csts_emb = csts_emb
         self.csts_id_emb = csts_id_emb
         self.encoder = encoder
@@ -31,14 +32,16 @@ class JetBackbone(nn.Module):
         csts: T.Tensor,
         csts_id: T.Tensor,
         mask: T.Tensor,
-        do_norm: bool = True,
     ) -> T.Tensor:
         """Pass through the complete backbone."""
-        if do_norm:
-            csts = self.normaliser(csts, mask)
+        # Embed the constituents
         x = self.csts_emb(csts)
+
+        # Embed the cst ids if expecting them
         if self.csts_id_emb is not None:
             x = x + self.csts_id_emb(csts_id)
+
+        # Pass through the encoder, calculate the new mask from the registers
         x = self.encoder(x, mask=mask)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask

@@ -21,4 +21,3 @@ flow:
     init_identity: True
     do_norm: False
     flow_type: coupling
-

@@ -101,13 +101,12 @@ class RegTask(TaskBase):
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         pred = self.head(data["outputs"][data["null_mask"]])
-        target = data["normed_csts"][data["null_mask"]]
+        target = data["csts"][data["null_mask"]]
         return (pred - target).abs().mean()
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
         pred = self.head(data["outputs"][data["null_mask"]])
-        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 
@@ -126,7 +125,7 @@ class FlowTask(TaskBase):
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # Unpack the data
-        normed_csts = data["normed_csts"]
+        csts = data["csts"]
         null_mask = data["null_mask"]
         outputs = data["outputs"]
 
@@ -136,11 +135,11 @@ class FlowTask(TaskBase):
         # At this stage these variables should be normalised, so hopefully adding a
         # little extra noise won't hurt.
         # As this is an inplace operation, we need to clone the tensor
-        normed_csts = normed_csts.clone()
-        normed_csts[..., -4:] += 0.05 * T.randn_like(normed_csts[..., -4:])
+        csts = csts.clone()
+        csts[..., -4:] += 0.05 * T.randn_like(csts[..., -4:])
 
         # Calculate the conditional likelihood under the flow
-        inpt = normed_csts[null_mask].float()
+        inpt = csts[null_mask].float()
         ctxt = self.head(outputs[null_mask]).float()
         return self.flow.forward_kld(inpt, context=ctxt)
 
@@ -148,7 +147,6 @@ class FlowTask(TaskBase):
         """Sample and plot the outputs of the head."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
         pred = self.flow.sample(ctxt.shape[0], context=ctxt)[0]
-        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 
@@ -163,7 +161,7 @@ class KmeansTask(TaskBase):
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # Get the target using the kmeans and the original csts
-        target = data["normed_csts"][data["null_mask"]].T.contiguous()
+        target = data["csts"][data["null_mask"]].T.contiguous()
         target = self.kmeans.predict(target).long()
 
         # Get the predictions and calculate the loss
@@ -176,7 +174,6 @@ class KmeansTask(TaskBase):
         pred = T.softmax(pred, dim=-1)
         pred = T.multinomial(pred, 1).squeeze(1)
         pred = self.kmeans.centroids.index_select(1, pred).T
-        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
     def on_fit_start(self, parent: nn.Module) -> None:
@@ -200,9 +197,7 @@ class KmeansTask(TaskBase):
         csts = T.vstack(csts).to(parent.device)
         mask = T.vstack(mask).to(parent.device)
 
-        # Fit the normaliser such that the labeller uses scaled inputs
-        parent.normaliser.fit(csts, mask, freeze=True)  # 50 batches should be enough
-        csts = parent.normaliser(csts, mask)  # Pass through the normaliser
+        # Fit the kmeans
         inputs = csts[mask].T.contiguous()
         self.kmeans.fit(inputs)
 
@@ -222,7 +217,7 @@ class DiffTask(TaskBase):
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
-        target = data["normed_csts"][data["null_mask"]]
+        target = data["csts"][data["null_mask"]]
         return self.diff.get_loss(target, ctxt)
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
@@ -231,7 +226,6 @@ class DiffTask(TaskBase):
         x1 = T.randn((ctxt.shape[0], parent.csts_dim), device=ctxt.device)
         times = T.linspace(1, 0, 100, device=ctxt.device)
         pred = self.diff.generate(x1, ctxt, times)
-        pred = parent.normaliser.reverse(pred)
         plot_continuous(data, pred)
 
 

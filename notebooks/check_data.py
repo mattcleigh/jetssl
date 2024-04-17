@@ -9,14 +9,10 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from mltools.mltools.plotting import plot_multi_hists
-from src.datamodules.collation import batch_preprocess_impact
 from src.datamodules.hdf import JC_CLASS_TO_LABEL, JetMappable
 from src.datamodules.masking import random_masking
-from src.datamodules.transforms import (
-    apply_masking,
-    compose,
-    log_squash_csts_pt,
-)
+from src.datamodules.preprocessing import batch_preprocess
+from src.datamodules.transforms import apply_masking
 
 # Define the type of information to load into the dict from the HDF files
 # List containing: key, type, slice
@@ -28,13 +24,7 @@ features = [
 ]
 
 # Define the preprocessing pipeline
-pipeline = partial(
-    compose,
-    transforms=[
-        partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5)),
-        log_squash_csts_pt,
-    ],
-)
+pipeline = partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5))
 
 # Create the datasets
 sh_data = JetMappable(
@@ -110,8 +100,8 @@ plot_multi_hists(
 sh_data.transforms = pipeline
 jc_data.transforms = pipeline
 collate_fn = partial(
-    batch_preprocess_impact,
-    fn=joblib.load(root / "src/datamodules/impact_processor.joblib"),
+    batch_preprocess,
+    fn=joblib.load(root / "resources/preprocessor_all.joblib"),
 )
 sh_loader = DataLoader(
     sh_data,

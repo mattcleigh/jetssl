@@ -75,7 +75,7 @@ def knn_masking(
     seed: int | None = None,
 ) -> np.ndarray:
     """Iteratively remove nodes and its knns."""
-    # Default slice
+    # Default slice: assumes [pt, eta, phi, ...]
     if pos_dims is None:
         pos_dims = slice(1, 3)
 

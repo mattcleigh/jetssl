@@ -6,7 +6,6 @@ from torch import nn
 from torch.nn.functional import cross_entropy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.modules import IterativeNormLayer
 from mltools.mltools.transformers import Transformer
 from src.models.utils import JetBackbone
 
@@ -72,9 +71,6 @@ class MaskedParticleModelling(pl.LightningModule):
         self.do_mae = do_mae
         self.n_classes = n_classes
 
-        # The normalisation layer (for the continuous features only)
-        self.normaliser = IterativeNormLayer(self.csts_dim)
-
         # The transformer encoder (encoder, no positional encoding)
         self.encoder = Transformer(**encoder_config)
 
@@ -101,10 +97,6 @@ class MaskedParticleModelling(pl.LightningModule):
 
     def _shared_step(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
-        # Normalise the continuous features and update the stats
-        # We need this key in the dict for the tasks
-        data["normed_csts"] = self.normaliser(data["csts"], data["mask"])
-
         # Pass through the model using the appropriate method
         data["outputs"] = self.mae_pass(data) if self.do_mae else self.bert_pass(data)
 
@@ -124,13 +116,13 @@ class MaskedParticleModelling(pl.LightningModule):
     def mae_pass(self, data: dict) -> T.Tensor:
         """Pass through the masked autoencoder using and get the decoder outputs."""
         # Unpack the inputs
-        normed_csts = data["normed_csts"]
+        csts = data["csts"]
         csts_id = data["csts_id"]
         mask = data["mask"]
         null_mask = data["null_mask"]
 
         # Embed the inputs
-        x = self.csts_emb(normed_csts)
+        x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
 
@@ -160,13 +152,13 @@ class MaskedParticleModelling(pl.LightningModule):
     def bert_pass(self, data: dict) -> T.Tensor:
         """Pass through the encoder only with the null tokens."""
         # Unpack the inputs
-        normed_csts = data["normed_csts"]
+        csts = data["csts"]
         csts_id = data["csts_id"]
         mask = data["mask"]
         null_mask = data["null_mask"]
 
         # Embed the inputs
-        x = self.csts_emb(normed_csts)
+        x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
 
@@ -197,11 +189,11 @@ class MaskedParticleModelling(pl.LightningModule):
     def full_encode(self, data: dict) -> T.Tensor:
         """Full forward pass for inference without null tokens."""
         # Unpack the inputs
-        normed_csts = data["normed_csts"]
+        csts = data["csts"]
         csts_id = data["csts_id"]
         mask = data["mask"]
 
-        x = self.csts_emb(normed_csts)
+        x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
         x = self.encoder(x, mask=mask)
@@ -226,7 +218,6 @@ class MaskedParticleModelling(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         """Create the pickled object for the backbone."""
         backbone = JetBackbone(
-            normaliser=self.normaliser,
             csts_emb=self.csts_emb,
             csts_id_emb=self.csts_id_emb,
             encoder=self.encoder,

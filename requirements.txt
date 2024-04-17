@@ -14,7 +14,7 @@ ninja
 flash-attn
 
 # fast clusering and kmeans
-cupy
+cupy-cuda12x
 torchpq
 
 # general data handling

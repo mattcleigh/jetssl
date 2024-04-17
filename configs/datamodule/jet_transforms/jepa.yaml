@@ -7,3 +7,11 @@ transforms:
       _target_: src.datamodules.masking.random_masking
       _partial_: True
       mask_fraction: 0.5
+    key: null_mask
+  - _target_: src.datamodules.transforms.apply_masking
+    _partial_: True
+    masking_fn:
+      _target_: src.datamodules.masking.random_masking
+      _partial_: True
+      mask_fraction: 0.2
+    key: target_mask
