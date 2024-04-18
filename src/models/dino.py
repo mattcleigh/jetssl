@@ -269,7 +269,7 @@ class JetDINO(pl.LightningModule):
             total_loss += probe_loss
             self.acc(class_out, labels)  # Updates internal state
             self.log(f"{prefix}/probe_loss", probe_loss)
-            self.log(f"{prefix}/accuracy", self.acc)
+            self.log(f"{prefix}/probe_accuracy", self.acc)
 
         # Log the metrics
         self.log(f"{prefix}/total_loss", total_loss)

@@ -9,7 +9,7 @@ defaults:
 # Smaller batch sizes - new preprocessor
 datamodule:
   loader_config:
-    batch_size: 64
+    batch_size: 250
 
 # Allows us to use the partially mappable datasets
 trainer:

@@ -1,4 +1,3 @@
-from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
@@ -44,7 +43,10 @@ class TaskBase(nn.Module):
             return T.tensor(0.0, requires_grad=True)
 
         # Calculate the loss, detaching if necessary
-        with T.no_grad() if self.detach else nullcontext():
+        if self.detach:
+            new_dict = {k: v.detach() for k, v in data.items()}  # Detach doesnt copy
+            loss = self._get_loss(parent, new_dict, prefix)
+        else:
             loss = self._get_loss(parent, data, prefix)
 
         # Log using the parent
@@ -234,7 +236,8 @@ class ProbeTask(TaskBase):
 
     def __init__(self, parent: nn.Module, class_head: partial, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.head = class_head(inpt_dim=parent.outp_dim, outp_dim=parent.n_classes)
+        # Uses the output of the encoder, not the full setup
+        self.head = class_head(inpt_dim=parent.encoder.dim, outp_dim=parent.n_classes)
         self.acc = Accuracy("multiclass", num_classes=parent.n_classes)
 
     def _get_loss(self, parent: nn.Module, data: dict, prefix: str) -> T.Tensor:
@@ -246,6 +249,6 @@ class ProbeTask(TaskBase):
 
         # Update and log the accuracy
         self.acc(preds, data["labels"])
-        parent.log(f"{prefix}/{self.name}_accuracy", loss)
+        parent.log(f"{prefix}/{self.name}_accuracy", self.acc)
 
         return loss

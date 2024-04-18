@@ -186,11 +186,11 @@ class JetJEPA(pl.LightningModule):
             loss += probe_loss
             self.acc(class_out, labels)  # Updates internal state
             self.log(f"{prefix}/probe_loss", probe_loss)
-            self.log(f"{prefix}/accuracy", self.acc)
+            self.log(f"{prefix}/probe_accuracy", self.acc)
 
         return loss
 
-    def mask_and_encode(
+    def drop_and_encode(
         self,
         csts: T.Tensor,
         csts_id: T.Tensor,
@@ -201,19 +201,10 @@ class JetJEPA(pl.LightningModule):
         # Pass the inputs through their respective embedding layers and sum
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
 
-        # Create array which allows us to index the null_mask in order per jet
-        nt = self.null_token[: x.size(1)]
-        nt = nt.unsqueeze(0).expand(*null_mask.shape, -1)
-        null_sorted = T.arange(null_mask.size(1), device=self.device)
-        null_sorted = null_sorted.unsqueeze(0).expand_as(null_mask)
-        null_sorted = null_sorted < null_mask.sum(dim=1, keepdim=True)
-
-        # Give positional encoding to the inputs
-        x[null_mask] = nt[null_sorted].type(x.dtype)
-
-        # Pass through the encoder (might gain registers)
-        x = self.encoder(x, mask=mask)
+        # Pass through the encoder while masking away null_nodes (might gain registers)
+        x = self.encoder(x, mask=mask & ~null_mask)
         mask = self.encoder.get_combined_mask(mask)
+
         return x, mask
 
     def pass_teacher(
@@ -241,9 +232,8 @@ class JetJEPA(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         """Create the pickled object for the backbone out of the teacher components."""
         backbone = JetBackbone(
-            None,  # No normaliser
-            ctst_embedder=self.t_ctst_embedder,
-            id_embedder=self.t_csts_id_embedder,
+            csts_emb=self.t_ctst_embedder,
+            csts_id_emb=self.t_csts_id_embedder,
             encoder=self.t_encoder,
         )
         backbone.eval()
