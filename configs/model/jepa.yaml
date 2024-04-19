@@ -2,19 +2,18 @@ _target_: src.models.jepa.JetJEPA
 
 t_ema: 0.992
 
+encoder_config:
+  do_final_norm: False # JEPA models all use final norm
+
 predictor_config:
-  dim: 128
-  num_layers: 3
+  dim: 256 # JEPA paper used 384
+  num_layers: 4  # JEPA paper used 12
+  num_registers: 0 # No registers. Already added before predictor.
   do_packed: True # Much faster training but requires half precision
-  do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
-  num_registers: 0 # NO registers. Already added before predictor.
-  do_final_norm: True
+  do_final_norm: False # JEPA models all use final norm
   layer_config:
     num_heads: 4
     ff_mult: 2
-
-encoder_config:
-  do_final_norm: True
 
 defaults:
   - encoder_config: small.yaml

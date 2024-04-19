@@ -7,12 +7,19 @@ from torchdiffeq import odeint
 from mltools.mltools.mlp import MLP
 from mltools.mltools.modules import CosineEncodingLayer
 from mltools.mltools.torch_utils import ema_param_sync
+from mltools.mltools.transformers import Transformer
+
+# TODO(Matthew): Make this a parameter... somehow
+# 001
+CSTS_ID = 8
 
 
 class JetBackbone(nn.Module):
     """Generalised backbone for the jet models.
 
-    Easy for saving and loading using the pickle module.
+    Simply wraps the constituent embedding, constituent id embedding and encoder
+    together in a single module.
+    Easy for saving and loading using the pickle module
     """
 
     def __init__(
@@ -25,7 +32,14 @@ class JetBackbone(nn.Module):
         self.csts_emb = csts_emb
         self.csts_id_emb = csts_id_emb
         self.encoder = encoder
-        self.output_dim = encoder.outp_dim
+
+    @property
+    def dim(self) -> int:
+        return self.encoder.dim
+
+    @property
+    def outp_dim(self) -> int:
+        return self.encoder.outp_dim
 
     def forward(
         self,
@@ -34,17 +48,31 @@ class JetBackbone(nn.Module):
         mask: T.Tensor,
     ) -> T.Tensor:
         """Pass through the complete backbone."""
-        # Embed the constituents
         x = self.csts_emb(csts)
-
-        # Embed the cst ids if expecting them
         if self.csts_id_emb is not None:
             x = x + self.csts_id_emb(csts_id)
-
-        # Pass through the encoder, calculate the new mask from the registers
         x = self.encoder(x, mask=mask)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
+
+
+class JetEncoder(JetBackbone):
+    """Generalised transformer encoder for the jets.
+
+    Same as above but we initialise via configs, not modules.
+    """
+
+    def __init__(
+        self,
+        *,
+        csts_dim: int,
+        encoder_config: dict,
+        use_csts_id: bool = True,
+    ) -> None:
+        encoder = Transformer(**encoder_config)
+        csts_emb = nn.Linear(csts_dim, encoder.dim)
+        csts_id_emb = nn.Embedding(CSTS_ID, encoder.dim) if use_csts_id else None
+        super().__init__(csts_emb, csts_id_emb, encoder)
 
 
 class VectorDiffuser(nn.Module):

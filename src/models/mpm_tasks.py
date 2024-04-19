@@ -160,6 +160,9 @@ class KmeansTask(TaskBase):
         self.kmeans = KMeans(**kmeans_config)
         self.head = nn.Linear(parent.outp_dim, self.kmeans.n_clusters)
 
+        # Populate the centroids or they wont be caputured in the state_dict
+        self.kmeans.centroids = T.zeros((parent.csts_dim, self.kmeans.n_clusters))
+
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # Get the target using the kmeans and the original csts
@@ -181,7 +184,7 @@ class KmeansTask(TaskBase):
     def on_fit_start(self, parent: nn.Module) -> None:
         """At the start of the fit, fit the kmeans."""
         # Skip kmeans has already been initialised (e.g. from a checkpoint)
-        if self.kmeans.centroids is not None:
+        if self.kmeans.centroids is not None and (self.kmeans.centroids > 0).any():
             return
 
         # Load the first 50 batches of training data
@@ -226,7 +229,7 @@ class DiffTask(TaskBase):
         """Sample and plot the outputs of the head."""
         ctxt = self.head(data["outputs"][data["null_mask"]])
         x1 = T.randn((ctxt.shape[0], parent.csts_dim), device=ctxt.device)
-        times = T.linspace(1, 0, 100, device=ctxt.device)
+        times = T.linspace(1, 0, 50, device=ctxt.device)
         pred = self.diff.generate(x1, ctxt, times)
         plot_continuous(data, pred)
 

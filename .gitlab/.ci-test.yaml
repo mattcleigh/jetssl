@@ -10,4 +10,4 @@ variables:
 unit-tests:
   <<: *test-template
   script:
-    - $TEST_CMD tests/test_models.py
+    - $TEST_CMD tests/test_mpm.py

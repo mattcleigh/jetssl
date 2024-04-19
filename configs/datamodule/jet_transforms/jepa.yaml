@@ -13,5 +13,5 @@ transforms:
     masking_fn:
       _target_: src.datamodules.masking.random_masking
       _partial_: True
-      mask_fraction: 0.2
+      mask_fraction: 0.5
     key: target_mask
