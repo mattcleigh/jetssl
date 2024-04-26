@@ -2,12 +2,7 @@ import os
 from functools import partial
 
 import pytest
-import rootutils
 import torch as T
-
-root = rootutils.setup_root(search_from=__file__, pythonpath=True)
-
-
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader, Dataset
 

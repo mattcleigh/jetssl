@@ -1,30 +1,26 @@
-defaults:
-  - jetclass_base/mappartial@train_set
-  - jetclass_base/mappable@val_set
-  - jetclass_base/mappable@test_set
-  - jet_transforms/mpm@train_set.transforms
-  - jet_transforms/mpm@val_set.transforms
-  - jet_transforms/mpm@test_set.transforms
-
-_target_: src.datamodules.hdf.JetDataModule
+_target_: src.datamodules.hdf_stream.StreamModule
 
 train_set:
-  path: ${paths.data_dir}/JetClassH5/train_100M/
+  path: ${paths.data_dir}/JetClassH5/train_100M_combined.h5
 
 val_set:
-  path: ${paths.data_dir}/JetClassH5/val_5M/
-  n_files: 1 # Really dont need 5 million validation events
+  path: ${paths.data_dir}/JetClassH5/val_5M_combined.h5
+  n_jets: 1000_000 # Dont need 5M
 
 test_set:
-  path: ${paths.data_dir}/JetClassH5/test_20M/
+  path: ${paths.data_dir}/JetClassH5/test_20M_combined.h5
+  n_jets: 1000_000 # Dont need 20M
 
-loader_config:
-  batch_size: 1000
-  num_workers: 3 # Speed testing show that 3 workers is enough even with augs
-  drop_last: false
-  shuffle: true
-  collate_fn:
-    _target_: src.datamodules.preprocessing.batch_preprocess
+num_workers: 6
+batch_size: 1000
+pin_memory:
+transforms:
+  - _target_: src.datamodules.preprocessing.batch_masking
+    _partial_: true
+    fn:
+      _target_: src.datamodules.masking.random_masking
+      _partial_: true
+  - _target_: src.datamodules.preprocessing.preprocess
     _partial_: true
     fn:
       _target_: joblib.load

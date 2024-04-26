@@ -29,7 +29,6 @@ class Vertexer(LightningModule):
         vertex_config: dict,
         optimizer: partial,
         scheduler: dict,
-        edge_dim: int = 64,
         pos_weight: float = 1.0,
     ) -> None:
         super().__init__()
@@ -41,18 +40,11 @@ class Vertexer(LightningModule):
 
         # Load the pretrained and pickled JetBackbone object.
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
-
-        # A linear resizing layer because the edges may go out of memory
-        self.resizing = nn.Sequential(
-            nn.Linear(self.backbone.encoder.outp_dim, edge_dim),
-            nn.SiLU(),
-        )
+        self.outp_dim = self.backbone.outp_dim
 
         # Create the head for the vertexing task
         self.vertex_head = MLP(
-            inpt_dim=edge_dim * 3,
-            outp_dim=1,
-            **vertex_config,
+            inpt_dim=self.outp_dim, outp_dim=self.outp_dim, **vertex_config
         )
 
         # Loss and metrics
@@ -60,20 +52,12 @@ class Vertexer(LightningModule):
         self.f1s = nn.ModuleList([F1Score("binary") for _ in range(n_classes + 1)])
 
     def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor) -> tuple:
-        # Pass through the backbone and resize
-        x, mask = self.backbone(csts, csts_id, mask)
-        x = self.resizing(x)
+        x, _ = self.backbone(csts, csts_id, mask)
+        x = x[:, -csts.shape[1] :]  # Trim off registers
+        x = self.vertex_head(x)  # Pass through the head
 
-        # Pull out the class token, and the real nodes (not registers)
-        n_reg = self.backbone.encoder.num_registers
-        edge_shape = (-1, csts.shape[1], csts.shape[1], -1)
-        cls_tok = x[:, None, None, 0].expand(edge_shape)
-        x1 = x[:, n_reg:].unsqueeze(1).expand(edge_shape)
-        x2 = x[:, n_reg:].unsqueeze(2).expand(edge_shape)
-
-        # Concatentate to get the edge features and pass through the head
-        edges = T.cat([cls_tok, x1, x2], dim=-1)
-        return self.vertex_head(edges)
+        # Return the scaled dot product of all the pairs
+        return x @ x.transpose(-1, -2) * (x.shape[-1] ** -0.5)
 
     def _shared_step(self, sample: tuple, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
@@ -84,11 +68,10 @@ class Vertexer(LightningModule):
         mask = sample["mask"]
         vtx_id = sample["vtx_id"]
 
-        # Calculate the mask for the edges
-        # Note we do not need the diagonal (self-edges)
+        # Calculate the mask for which edges are needed
+        # Note we only need the upper triangle of the matrix (symmetric)
         vtx_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
-        eye = T.eye(vtx_id.shape[1], dtype=T.bool, device=vtx_id.device).unsqueeze(0)
-        vtx_mask = vtx_mask & ~eye
+        vtx_mask = T.triu(vtx_mask, diagonal=1)  # No diagonal = self edges
 
         # Calculate the target based on if the vtx id matches
         target = vtx_id.unsqueeze(1) == vtx_id.unsqueeze(2)
@@ -101,6 +84,8 @@ class Vertexer(LightningModule):
         loss = binary_cross_entropy_with_logits(
             output, target, pos_weight=self.pos_weight
         )
+
+        # Calculate the metrics (last index is for all)
         self.accs[-1](output, target)
         self.f1s[-1](output, target)
 

@@ -2,9 +2,6 @@ defaults:
   - jetclass_base/mappable@train_set # We use mappable datasets
   - jetclass_base/mappable@val_set
   - jetclass_base/mappable@test_set
-  - jet_transforms/standard@train_set.transforms
-  - jet_transforms/standard@val_set.transforms
-  - jet_transforms/standard@test_set.transforms
 
 _target_: src.datamodules.hdf.JetDataModule
 

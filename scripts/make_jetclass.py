@@ -66,6 +66,9 @@ def main() -> None:
 
     # Loop over the subfolders
     for subfolder in subfolders:
+        if "test" not in str(subfolder):
+            continue
+
         print(f"Processing {subfolder.name}")
 
         # Copy the subfolder to the destination path

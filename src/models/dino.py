@@ -293,7 +293,7 @@ class JetDINO(pl.LightningModule):
         """Use the mltools optimiser and scheduler."""
         return simple_optim_sched(self)
 
-    def on_train_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         """Create the pickled object for the backbone out of the teacher components."""
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")

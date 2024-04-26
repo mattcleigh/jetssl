@@ -1,15 +1,14 @@
 _target_: src.models.vertexer.Vertexer
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl/backbones/untrained.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/diff.pkl
 pos_weight: 0.7825 # Calculated from shlomi ratio
-edge_dim: 256 # Squashes the output of the encoder
 
 vertex_config:
-  num_blocks: 2
-  hddn_dim: 128
+  num_blocks: 3
+  hddn_dim: 256
   norm: LayerNorm
 
 defaults:
   - optimizer: default.yaml
-  - scheduler: warmup_decay.yaml
+  - scheduler: cosine.yaml
   - _self_

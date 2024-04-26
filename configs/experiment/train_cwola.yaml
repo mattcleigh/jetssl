@@ -8,7 +8,7 @@ defaults:
 # Change target to the CWoLa model
 model:
   _target_: src.models.classifier.CWoLaClassifier
-  scheduler:
+  scheduler: # Faster warmup
     warmup_steps: 5000
 
 # Manually stop at 20 epochs

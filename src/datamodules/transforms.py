@@ -1,4 +1,6 @@
-"""A collection of functions to apply preprocessing to jet tuples.
+"""Note: Not currently used in the project, but kept for future reference.
+
+A collection of functions to apply preprocessing to jet tuples.
 
 The jet tuple is a tuple of the following format:
 

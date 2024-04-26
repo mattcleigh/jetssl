@@ -91,6 +91,7 @@ class MaskedParticleModelling(pl.LightningModule):
 
         # Initialise each of the tasks
         self.tasks = nn.ModuleDict({k: v(self, name=k) for k, v in tasks.items()})
+        self.on_train_epoch_end()
 
     def _shared_step(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
@@ -212,7 +213,7 @@ class MaskedParticleModelling(pl.LightningModule):
         for task in self.tasks.values():
             task.on_fit_start(self)
 
-    def on_train_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         """Create the pickled object for the backbone."""
         backbone = JetBackbone(
             csts_emb=self.csts_emb,

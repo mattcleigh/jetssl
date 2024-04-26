@@ -5,19 +5,18 @@ defaults:
   ######################
   # - /model/tasks/id
   # - /model/tasks/reg
-  # - /model/tasks/kmeans
+  - /model/tasks/kmeans
   # - /model/tasks/diff
   # - /model/tasks/flow
-  # - /model/tasks/probe # Keep this on for benchmarking
+  - /model/tasks/probe # Keep this on for benchmarking
   ######################
   - override /datamodule: jetclass_masked
   - override /model: mpm
 
 # Allows us to use the partially mappable datasets
 trainer:
-  max_epochs: -1 # Run indefinitely
-  reload_dataloaders_every_n_epochs: 5
-  check_val_every_n_epoch: 5
+  max_epochs: 1000 # Seems long enough... SCIENCE!
+  val_check_interval: 1000 # batches
 
 # Model modifications
 project_name: jetssl2

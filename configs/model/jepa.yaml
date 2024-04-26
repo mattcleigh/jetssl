@@ -10,7 +10,7 @@ predictor_config:
   num_layers: 4  # JEPA paper used 12
   num_registers: 0 # No registers. Already added before predictor.
   do_packed: True # Much faster training but requires half precision
-  do_final_norm: False # JEPA models all use final norm
+  do_final_norm: False # JEPA models all use final norm... Maybe I should too?
   layer_config:
     num_heads: 4
     ff_mult: 2

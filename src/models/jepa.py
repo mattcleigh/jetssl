@@ -71,7 +71,7 @@ class JEPAPredictor(nn.Module):
         self.input_proj = nn.Linear(inpt_dim, self.dim)
         self.output_proj = nn.Linear(self.dim, inpt_dim)
 
-        # The tokens for the null and target nodes, includes positional encoding
+        # The tokens for the null and target nodes
         self.null_token = nn.Parameter(T.randn((1, 1, self.dim)) * 1e-3)
         self.target_token = nn.Parameter(T.randn((1, 1, self.dim)) * 1e-3)
 
@@ -174,9 +174,9 @@ class JetJEPA(pl.LightningModule):
         null_mask = sample["null_mask"]
         target_mask = sample["target_mask"]
 
-        # Dont allow overlap between the null and target masks
-        # JEPA code forces this even if their diagrams show overlap
-        target_mask[null_mask] = False
+        # Make sure that the target mask is a subset of the null mask
+        # (dont predict it if it wasnt hidden in the first place)
+        target_mask[~null_mask] = False
 
         # Pass the inputs through the student model, masking some nodes
         s_out, s_mask = self.student(csts, csts_id, mask & ~null_mask)
