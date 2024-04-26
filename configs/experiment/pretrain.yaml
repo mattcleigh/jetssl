@@ -13,11 +13,10 @@ defaults:
   - override /datamodule: jetclass_masked
   - override /model: mpm
 
-# Allows us to use the partially mappable datasets
 trainer:
-  max_epochs: 1000 # Seems long enough... SCIENCE!
-  val_check_interval: 1000 # batches
+  max_epochs: 1000
+  val_check_interval: 5000
 
 # Model modifications
 project_name: jetssl2
-network_name: mpm
+network_name: kmeans2

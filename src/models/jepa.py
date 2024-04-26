@@ -31,11 +31,7 @@ class VarCovRegLoss(nn.Module):
         super().__init__()
         self.std_weight = std_weight
         self.cov_weight = cov_weight
-        self.fn = nn.Sequential(
-            nn.Linear(inpt_dim, (expand_dim + inpt_dim) // 2),
-            nn.SiLU(),
-            nn.Linear((expand_dim + inpt_dim) // 2, expand_dim),
-        )
+        self.fn = nn.Linear(inpt_dim, expand_dim)
 
     def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
         """Calculate the loss."""
@@ -231,7 +227,7 @@ class JetJEPA(pl.LightningModule):
         """Use the mltools optimiser and scheduler."""
         return simple_optim_sched(self)
 
-    def on_train_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         """Create the pickled object for the backbone out of the teacher components."""
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")

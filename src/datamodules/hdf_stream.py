@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from functools import partial
 from itertools import starmap
@@ -10,6 +11,8 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 
 from src.datamodules.hdf import identity
 from src.datamodules.hdf_utils import HDFRead, combine_slices
+
+log = logging.getLogger(__name__)
 
 
 class BatchSampler(Sampler):
@@ -75,8 +78,8 @@ class JetHDFStream(Dataset):
         self,
         *,
         path: str,
-        features: list[list] | None,
         n_classes: int,
+        features: list[list] | None = None,
         csts_dim: int | None = None,
         n_jets: int | list | None = None,
         transforms: Callable | list = identity,
@@ -108,13 +111,13 @@ class JetHDFStream(Dataset):
         # Insert the csts dim into the features
         # This is a hack but we need the csts to change with hydra for now
         if csts_dim is not None:
-            print("Warning! Explicitly setting the csts dimension")
-            print("This is a hack and should be removed in the future!")
+            log.info("Warning! Explicitly setting the csts dimension")
+            log.info("This is a hack and should be removed in the future!")
             c_idx = [i for i, f in enumerate(features) if f[0] == "csts"][0]
             curr = features[c_idx][-1]
             features[c_idx][-1] = [curr, [csts_dim]]
-            print("New feature slice for csts:")
-            print(features[c_idx])
+            log.info("New feature slice for csts:")
+            log.info(features[c_idx])
 
         # Class attributes
         self.n_classes = n_classes
@@ -126,6 +129,9 @@ class JetHDFStream(Dataset):
         if not isinstance(transforms, list):
             transforms = [transforms]
         self.transforms = transforms
+
+        log.info(f"Streaming from {path}")
+        log.info(f"- selected {self.n_jets} jets")
 
     def __len__(self) -> int:
         return self.n_jets
@@ -179,7 +185,7 @@ class StreamModule(LightningDataModule):
             sampler=BatchSampler(
                 dataset,
                 batch_size=self.batch_size,
-                shuffle=flag == "train",
+                shuffle=False,  # flag == "train", Honestly its so big...
                 drop_last=flag == "train",
             ),
             num_workers=self.num_workers,
@@ -189,19 +195,18 @@ class StreamModule(LightningDataModule):
             collate_fn=None,  # collations should be handled by the dataset
         )
 
-    def train_dataloader(self) -> DataLoader:
-        self.get_dataloader(self.train_set, "train")
-
-    def val_dataloader(self) -> DataLoader:
-        self.get_dataloader(self.val_set, "val")
-
-    def test_dataloader(self) -> DataLoader:
-        self.get_dataloader(self.test_set, "test")
-
-    def predict_dataloader(self) -> DataLoader:
-        return self.test_dataloader()
-
     def get_data_sample(self) -> tuple:
         """Get a data sample to help initialise the network."""
-        batch = next(iter(self.valid_set))
-        return {k: v[0] for k, v in batch.items()}  # Only get first element
+        return next(iter(self.val_set))
+
+    def train_dataloader(self) -> DataLoader:
+        return self.get_dataloader(self.train_set, "train")
+
+    def val_dataloader(self) -> DataLoader:
+        return self.get_dataloader(self.val_set, "val")
+
+    def test_dataloader(self) -> DataLoader:
+        return self.get_dataloader(self.test_set, "test")
+
+    def predict_dataloader(self) -> DataLoader:
+        return self.get_dataloader(self.test_set, "test")

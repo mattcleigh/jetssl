@@ -21,9 +21,9 @@ def main() -> None:
         mem_gb=40,
         opt_dict={
             "network_name": [
-                "kmeans",
-                "diff",
-                "flow",
+                "kmeans_c",
+                "diff_c",
+                "flow_c",
             ],
             "+model/tasks": [
                 "[kmeans,probe]",

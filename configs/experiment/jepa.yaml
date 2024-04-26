@@ -1,16 +1,34 @@
 # @package _global_
 defaults:
-  - /datamodule/jet_transforms/jepa@datamodule.train_set.transforms
-  - /datamodule/jet_transforms/jepa@datamodule.val_set.transforms
-  - /datamodule/jet_transforms/jepa@datamodule.test_set.transforms
   - override /datamodule: jetclass_masked
   - override /model: jepa
 
-# Allows us to use the partially mappable datasets
+# Datamodule with two masking operations
+datamodule:
+  transforms:
+    - _target_: src.datamodules.preprocessing.batch_masking
+      _partial_: true
+      fn:
+        _target_: src.datamodules.masking.random_masking
+        _partial_: true
+        mask_fraction: 0.5
+      key: null_mask
+    - _target_: src.datamodules.preprocessing.batch_masking
+      _partial_: true
+      fn:
+        _target_: src.datamodules.masking.random_masking
+        _partial_: true
+        mask_fraction: 0.5
+      key: target_mask
+    - _target_: src.datamodules.preprocessing.preprocess
+      _partial_: true
+      fn:
+        _target_: joblib.load
+        filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+
 trainer:
-  max_epochs: -1 # Run indefinitely
-  reload_dataloaders_every_n_epochs: 5
-  check_val_every_n_epoch: 5
+  max_epochs: 1000
+  val_check_interval: 5000
 
 # Model modifications
 project_name: jetssl2

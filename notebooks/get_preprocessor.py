@@ -53,9 +53,9 @@ qt = QuantileTransformer(
     subsample=len(csts) + 1,
 )
 qt.fit(csts)
-dump(qt, "preprocessor_all.joblib")
+dump(qt, "quantile.joblib")
 
-# Check how the transformation worked (just plot the neutrals particles)
+# Check how the transformation worked (just plot the charged particles)
 data = np.nan_to_num(csts[~neut_mask])
 transformed = qt.transform(data)
 from mltools.mltools.plotting import plot_multi_hists
