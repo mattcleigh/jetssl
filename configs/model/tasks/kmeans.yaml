@@ -6,6 +6,8 @@ kmeans:
   weight: 1.0
   detach: False
   apply_every: 1
+  id_conditional: True
+  id_embed_dim: 64
 
   kmeans_config:
     n_clusters: 8192

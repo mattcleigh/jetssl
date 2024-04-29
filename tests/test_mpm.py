@@ -74,6 +74,15 @@ kmeans_task = partial(
         "max_iter": 5,
     },
 )
+kmeans_cond_task = partial(
+    KmeansTask,
+    name="kmeans_cond",
+    kmeans_config={
+        "n_clusters": 5,
+        "max_iter": 5,
+    },
+    id_conditional=True,
+)
 diff_task = partial(
     DiffTask,
     name="diff",
@@ -129,6 +138,7 @@ tasks = [
     {"reg": reg_task},
     {"flow": flow_task},
     {"kmeans": kmeans_task},
+    {"kmeans_cond_task": kmeans_cond_task},
     {"diff": diff_task},
     {"probe": probe_task},
 ]

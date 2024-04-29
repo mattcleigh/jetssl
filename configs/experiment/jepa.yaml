@@ -5,6 +5,7 @@ defaults:
 
 # Datamodule with two masking operations
 datamodule:
+  batch_size: 500 # Can't fit 1k with joint embedder
   transforms:
     - _target_: src.datamodules.preprocessing.batch_masking
       _partial_: true
@@ -27,9 +28,9 @@ datamodule:
         filename: ${paths.root_dir}/resources/preprocessor_all.joblib
 
 trainer:
-  max_epochs: 1000
+  max_steps: 1000_000
   val_check_interval: 5000
 
 # Model modifications
 project_name: jetssl2
-network_name: jepa
+network_name: test

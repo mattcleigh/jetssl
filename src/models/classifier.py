@@ -41,11 +41,10 @@ class Classifier(LightningModule):
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
 
         # Create the head for the downstream task
+        # Use logistic regression for binary classification
         self.class_head = class_head(
             inpt_dim=self.backbone.encoder.outp_dim,
-            outp_dim=n_classes
-            if n_classes > 2
-            else 1,  # Logistic regression for binary
+            outp_dim=n_classes if n_classes > 2 else 1,
         )
 
         # Loss and metrics

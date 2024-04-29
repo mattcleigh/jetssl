@@ -1,6 +1,6 @@
 _target_: src.models.vertexer.Vertexer
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/diff.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.pkl
 pos_weight: 0.7825 # Calculated from shlomi ratio
 
 vertex_config:

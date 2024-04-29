@@ -17,18 +17,18 @@ def main() -> None:
         n_cpus=6,
         gpu_type="ampere",
         vram_per_gpu=20,
-        time_hrs=7 * 24,
+        time_hrs=4 * 24,
         mem_gb=40,
         opt_dict={
             "network_name": [
-                "dino",
-                "jepa",
+                "dinov2",
+                "jepav2",
             ],
             "model": [
                 "dino",
                 "jepa",
             ],
-            "datamodule.loader_config.batch_size": [
+            "datamodule.batch_size": [
                 500,
                 500,
             ],

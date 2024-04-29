@@ -25,10 +25,10 @@ backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0, 1]
+seeds = [0]
 
 # Define the model backbones to finetune
-model_names = ["token", "untrained"]
+model_names = ["kmeans", "diff", "flow", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {

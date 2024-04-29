@@ -24,15 +24,26 @@ class TaskBase(nn.Module):
         self,
         *,  # Force keyword arguments
         name: str,
+        input_dim: int = 0,
         weight: float = 1.0,
         detach: bool = False,
         apply_every: int = 1,
+        id_conditional: bool = False,
+        id_embed_dim: int = 128,
     ) -> None:
         super().__init__()
         self.name = name
+        self.input_dim = input_dim
         self.weight = weight
         self.detach = detach
         self.apply_every = apply_every
+        self.id_conditional = id_conditional
+        self.id_embed_dim = id_embed_dim
+
+        # For conditional tasks we add the csts_id to the input
+        if id_conditional:
+            self.id_one_hot = nn.Embedding(CSTS_ID, self.id_embed_dim)
+            self.input_dim += self.id_embed_dim
 
     def get_loss(
         self, parent: nn.Module, data: dict, batch_idx: int, prefix: str
@@ -55,6 +66,20 @@ class TaskBase(nn.Module):
         # Return with the weight
         return self.weight * loss
 
+    def get_head_input(self, data: dict) -> T.Tensor:
+        """Get the inputs for the task head.
+
+        Only works if the head acts on the flattened outputs of the model.
+
+        If applicable combines it with the true ID of the constituent.
+        """
+        outputs = data["outputs"][data["null_mask"]]
+        if self.id_conditional:
+            true_id = data["csts_id"][data["null_mask"]]
+            true_id = self.id_one_hot(true_id)
+            return T.concat([outputs, true_id], dim=-1)
+        return outputs
+
     @T.no_grad()
     def visualise(self, parent: nn.Module, data: dict) -> None:
         """Visualise the task."""
@@ -76,18 +101,18 @@ class IDTask(TaskBase):
     """Task for predicting the ID of the constituent."""
 
     def __init__(self, parent: nn.Module, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.head = nn.Linear(parent.outp_dim, CSTS_ID)
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
+        self.head = nn.Linear(self.input_dim, CSTS_ID)
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         target = data["csts_id"][data["null_mask"]]
         return cross_entropy(pred, target, label_smoothing=0.1)
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         pred = T.softmax(pred, dim=-1)
         pred = T.multinomial(pred, 1).squeeze(1)
         plot_labels(data, pred)
@@ -97,18 +122,18 @@ class RegTask(TaskBase):
     """Task for regressing the properties of the constituent."""
 
     def __init__(self, parent: nn.Module, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.head = nn.Linear(parent.outp_dim, parent.csts_dim)
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
+        self.head = nn.Linear(self.input_dim, parent.csts_dim)
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         target = data["csts"][data["null_mask"]]
         return (pred - target).abs().mean()
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         plot_continuous(data, pred)
 
 
@@ -118,8 +143,8 @@ class FlowTask(TaskBase):
     def __init__(
         self, parent: nn.Module, embed_dim: int, flow_config: dict, **kwargs
     ) -> None:
-        super().__init__(**kwargs)
-        self.head = nn.Linear(parent.outp_dim, embed_dim)
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
+        self.head = nn.Linear(self.input_dim, embed_dim)
         self.flow = rqs_flow(xz_dim=parent.csts_dim, ctxt_dim=embed_dim, **flow_config)
 
     @T.autocast("cuda", enabled=False)  # Autocasting is bad for flows
@@ -129,7 +154,6 @@ class FlowTask(TaskBase):
         # Unpack the data
         csts = data["csts"]
         null_mask = data["null_mask"]
-        outputs = data["outputs"]
 
         # The flow can't handle discrete targets which unfortunately affects the
         # impact paramters. Even for charged particles, there are discrete values
@@ -142,12 +166,12 @@ class FlowTask(TaskBase):
 
         # Calculate the conditional likelihood under the flow
         inpt = csts[null_mask].float()
-        ctxt = self.head(outputs[null_mask]).float()
+        ctxt = self.head(self.get_head_input(data)).float()
         return self.flow.forward_kld(inpt, context=ctxt)
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
-        ctxt = self.head(data["outputs"][data["null_mask"]])
+        ctxt = self.head(self.get_head_input(data))
         pred = self.flow.sample(ctxt.shape[0], context=ctxt)[0]
         plot_continuous(data, pred)
 
@@ -156,9 +180,9 @@ class KmeansTask(TaskBase):
     """Task for modelling the properties of the constituent using kmeans clustering."""
 
     def __init__(self, parent: nn.Module, kmeans_config: dict, **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
         self.kmeans = KMeans(**kmeans_config)
-        self.head = nn.Linear(parent.outp_dim, self.kmeans.n_clusters)
+        self.head = nn.Linear(self.input_dim, self.kmeans.n_clusters)
 
         # Populate the centroids or they wont be caputured in the state_dict
         self.kmeans.centroids = T.zeros((parent.csts_dim, self.kmeans.n_clusters))
@@ -170,12 +194,12 @@ class KmeansTask(TaskBase):
         target = self.kmeans.predict(target).long()
 
         # Get the predictions and calculate the loss
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         return cross_entropy(pred, target, label_smoothing=0.1)
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
-        pred = self.head(data["outputs"][data["null_mask"]])
+        pred = self.head(self.get_head_input(data))
         pred = T.softmax(pred, dim=-1)
         pred = T.multinomial(pred, 1).squeeze(1)
         pred = self.kmeans.centroids.index_select(1, pred).T
@@ -213,21 +237,21 @@ class DiffTask(TaskBase):
     def __init__(
         self, parent: nn.Module, embed_dim: int, diff_config: dict, **kwargs
     ) -> None:
-        super().__init__(**kwargs)
-        self.head = nn.Linear(parent.outp_dim, embed_dim)
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
+        self.head = nn.Linear(self.input_dim, embed_dim)
         self.diff = VectorDiffuser(
             inpt_dim=parent.csts_dim, ctxt_dim=embed_dim, **diff_config
         )
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
-        ctxt = self.head(data["outputs"][data["null_mask"]])
+        ctxt = self.head(self.get_head_input(data))
         target = data["csts"][data["null_mask"]]
         return self.diff.get_loss(target, ctxt)
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
-        ctxt = self.head(data["outputs"][data["null_mask"]])
+        ctxt = self.head(self.get_head_input(data))
         x1 = T.randn((ctxt.shape[0], parent.csts_dim), device=ctxt.device)
         times = T.linspace(1, 0, 50, device=ctxt.device)
         pred = self.diff.generate(x1, ctxt, times)
@@ -238,8 +262,7 @@ class ProbeTask(TaskBase):
     """Classify the jet using the full outputs and the labels."""
 
     def __init__(self, parent: nn.Module, class_head: partial, **kwargs) -> None:
-        super().__init__(**kwargs)
-        # Uses the output of the encoder, not the full setup
+        super().__init__(input_dim=parent.encoder.dim, **kwargs)
         self.head = class_head(inpt_dim=parent.encoder.dim, outp_dim=parent.n_classes)
         self.acc = Accuracy("multiclass", num_classes=parent.n_classes)
 

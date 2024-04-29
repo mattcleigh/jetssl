@@ -5,18 +5,18 @@ defaults:
   ######################
   # - /model/tasks/id
   # - /model/tasks/reg
-  - /model/tasks/kmeans
+  # - /model/tasks/kmeans
   # - /model/tasks/diff
   # - /model/tasks/flow
-  - /model/tasks/probe # Keep this on for benchmarking
+  # - /model/tasks/probe # Keep this on for benchmarking
   ######################
   - override /datamodule: jetclass_masked
   - override /model: mpm
 
 trainer:
-  max_epochs: 1000
+  max_steps: 1000_000
   val_check_interval: 5000
 
 # Model modifications
 project_name: jetssl2
-network_name: kmeans2
+network_name: test
