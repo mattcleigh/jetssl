@@ -16,7 +16,7 @@ trainer:
   max_steps: 50_000
 
 # Key parameters for fine-tuning
-n_jets: 1000_0000
+n_jets: 1000_000
 
 # Never finetune on the full dataset, always 1 file and n_jets
 datamodule:
@@ -27,11 +27,11 @@ datamodule:
     n_files: 1
     n_jets_total: ${n_jets}
   test_set:
-    n_files: 1
+    n_files: 1 # No njets limit on test set
   loader_config:
     batch_size: 500 # Smaller because some setups have 1000 jets
     num_workers: 2
 
 # Bookkeeping
-project_name: jetssl_finetune
+project_name: jetssl_finetune3
 network_name: classifier_${n_jets}

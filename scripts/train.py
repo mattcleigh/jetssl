@@ -77,8 +77,9 @@ def main(cfg: DictConfig) -> None:
     log.info("Starting training!")
     trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
-    log.info("Declaring job as finished!")
-    save_declaration("train_finished")
+    if trainer.state.status == "finished":
+        log.info("Declaring job as finished!")
+        save_declaration("train_finished")
 
 
 if __name__ == "__main__":

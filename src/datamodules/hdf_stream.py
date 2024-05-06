@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from functools import partial
 from itertools import starmap
 
@@ -48,7 +48,7 @@ class BatchSampler(Sampler):
     def __len__(self) -> int:
         return self.n_batches + self.incl_last
 
-    def __iter__(self) -> slice:
+    def __iter__(self) -> Generator:
         # Create the batch ids
         if self.shuffle:
             self.batch_ids = T.randperm(self.n_batches)
@@ -209,4 +209,4 @@ class StreamModule(LightningDataModule):
         return self.get_dataloader(self.test_set, "test")
 
     def predict_dataloader(self) -> DataLoader:
-        return self.get_dataloader(self.test_set, "test")
+        return self.test_dataloader()

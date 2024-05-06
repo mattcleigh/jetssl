@@ -3,6 +3,7 @@ from pathlib import Path
 import h5py
 import hydra
 import numpy as np
+import pandas as pd
 import rootutils
 from omegaconf import DictConfig
 
@@ -20,43 +21,78 @@ def main(cfg: DictConfig):
     # Load the list of models
     model_list = list(cfg.models.values())
 
-    # Create the figure
+    # Create the pandas dataframe to hold all the run information
+    df = pd.DataFrame(columns=["model", "n_samples", "seed", "accuracy"])
+
+    # For each model find all variants and seeds
+    for run in model_list:
+        # Seach in the directory for everything matching the model name
+        models = list(Path(cfg.path).glob(run + "*"))
+
+        # Cycle through the models
+        for m in models:
+            # <dataset_name>_<model_name>_<n_samples>_<seed>
+            _dset, model, n_samples, seed = m.name.split("_")
+            n_samples = int(n_samples)
+            seed = int(seed)
+
+            # Clip at the shlomi dataset size
+            if "shlomi" in cfg.outfile:
+                n_samples = min(n_samples, 543544)
+
+            # Load the exported test set
+            file_path = m / "outputs" / "test_set.h5"
+            try:
+                with h5py.File(file_path, "r") as f:
+                    labels = f["label"][:]
+                    outputs = f["output"][:]
+            except FileNotFoundError:
+                continue
+            pred = np.argmax(outputs, axis=1, keepdims=True)
+            acc = (labels == pred).mean()
+
+            # Add the information to the dataframe
+            row = pd.DataFrame([[model, n_samples, seed, acc]], columns=df.columns)
+            df = pd.concat([df, row])
+
+    # Sort the dataframe by the number of samples
+    df = df.sort_values(by="n_samples")
+
+    # Make the plots
     fig, ax = plt.subplots(figsize=(5, 5))
 
-    # For each model find all variants
-    for model in model_list:
-        # Seach in the directory for everything matching the model name
-        model_variants = list(Path(cfg.path).glob(model + "*"))
-        n_samples = [int(m.name.split("_")[-1]) for m in model_variants]
+    # Cycle through the models
+    for m in np.unique(df["model"]):
+        # Get the data for this model
+        data = df[df["model"] == m]
+        data = data.drop(columns=["model"])
 
-        # Sort by the number of samples
-        model_variants = [
-            m for _, m in sorted(zip(n_samples, model_variants, strict=False))
-        ]
-        n_samples = np.array(sorted(n_samples))
+        # Combine the seeds into mean and std
+        data = data.groupby(["n_samples"]).agg(["mean", "std"]).reset_index()
 
-        # Clip at the shlomi dataset size
-        if "shlomi" in cfg.outfile:
-            n_samples = np.clip(n_samples, 1, 543544)
+        # Plot the data
+        line = ax.plot(
+            data["n_samples"],
+            data["accuracy"]["mean"],
+            "-o",
+            label=m,
+        )
 
-        # For each varaint load the accuracies
-        acc = []
-        for variant in model_variants:
-            file_path = variant / "outputs" / "test_set.h5"
-            with h5py.File(file_path, "r") as f:
-                labels = f["label"][:]
-                outputs = f["output"][:]
-            pred = np.argmax(outputs, axis=1, keepdims=True)
-            acc.append((labels == pred).mean())
+        # Add shaded region for the std if defined
+        if data["accuracy"]["std"].notna().all():
+            ax.fill_between(
+                data["n_samples"],
+                data["accuracy"]["mean"] - data["accuracy"]["std"],
+                data["accuracy"]["mean"] + data["accuracy"]["std"],
+                alpha=0.2,
+                color=line[0].get_color(),
+            )
 
-        # Plot the accuracies
-        ax.plot(n_samples, acc, "-o", label=model.split("_")[1])
-
-    # Tidy up
     ax.set_xlabel("Number of training samples")
     ax.set_ylabel("Accuracy")
     ax.legend()
     ax.set_xscale("log")
+    ax.grid(True, which="both", ls="--", alpha=0.5)
     fig.tight_layout()
 
     # Make the directory and save the plot

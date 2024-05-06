@@ -31,11 +31,10 @@ def main() -> None:
 
     # Get the top level folders (train, val, test)
     subsets = [x for x in Path(args.data_path).iterdir() if x.is_dir()]
-
     # Cycle through each subset
     for subset in subsets:
-        # Skip the test set
-        if "test" not in subset.name:
+        # Skip the train set
+        if "train" in subset.name:
             continue
 
         print(f"Processing {subset.name}")

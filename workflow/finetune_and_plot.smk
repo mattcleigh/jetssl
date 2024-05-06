@@ -25,16 +25,16 @@ backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0]
+seeds = [0, 1, 2, 3]
 
 # Define the model backbones to finetune
 model_names = ["kmeans", "diff", "flow", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {
-    "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
-    "vtx": ["experiment=train_vertexer"],
+    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
+    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    # "vtx": ["experiment=train_vertexer"],
     "cwola": ["experiment=train_cwola"],
 }
 
@@ -46,7 +46,6 @@ n_jets = [1e3, 1e4, 1e5, 1e6]
 # Flatten the parameters with spaces for easier injection
 dt_names = list(downstream_tasks.keys())
 dt_args = {k: " ".join(v) for k, v in downstream_tasks.items()}
-n_jets = [int(j) for j in n_jets]
 
 # Final rule to form the endpoint of the DAG
 rule all:
@@ -59,11 +58,15 @@ for dt in dt_names:
 
     # For the cwola task, we need much less jets!
     if dt == "cwola":
-        n_jets = [n//10 for n in n_jets]
+        n_jets = [1e3, 3162, 1e4, 31623, 1e5]
+    # For the vertexing task, we use all jets only
+    elif dt == "vtx":
+        n_jets = [1e6]
+    n_jets = [int(j) for j in n_jets]
 
     # Work out whick plotting script to run
     if dt == "vtx":
-        plot_script = "plotting/vtx_vs_njets.py"
+        plot_script = "plotting/vtx_perf.py"
     elif dt == "cwola":
         plot_script = "plotting/sic_vs_njets.py"
     else:

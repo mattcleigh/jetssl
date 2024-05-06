@@ -8,9 +8,13 @@ hydra:
   run:
     dir: .
 
-path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune/
+path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune2/
 plot_dir: plots/
 outfile: test
 
-models: {}
+models: #{}
+  a: cwola_kmeans
+  b: cwola_diff
+  c: cwola_flow
+  d: cwola_untrained
 

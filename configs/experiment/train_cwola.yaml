@@ -13,7 +13,7 @@ model:
 
 # Manually stop at 20 epochs
 trainer:
-  max_epochs: 20
+  max_epochs: 10
 
 # Key parameters for fine-tuning
 n_jets: 50_000 # This is for the num_signal but we will use the same name

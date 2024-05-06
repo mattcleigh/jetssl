@@ -15,10 +15,10 @@ val_set:
 
 test_set:
   path: ${paths.data_dir}/JetClassH5/test_20M/
-  n_files: 1 # Really dont need 20 million testing events
+  n_files: 5 # Really dont need 20 million testing events
 
 loader_config:
-  batch_size: 1250
+  batch_size: 1000
   num_workers: 1
   drop_last: true
   shuffle: true

@@ -239,3 +239,38 @@ def common_particle_class(
     label[isMuon & (charge == -1)] = 6
     label[isMuon & (charge == 1)] = 7
     return label
+
+
+def csts_to_jet(csts: np.ndarray, mask: np.ndarray) -> tuple:
+    """Calculate high level jet variables using only the constituents."""
+    # Split the csts into the different groups of information
+    cst_px = csts[..., 0] * mask
+    cst_py = csts[..., 1] * mask
+    cst_pz = csts[..., 2] * mask
+    cst_e = np.sqrt(cst_px**2 + cst_py**2 + cst_pz**2)
+
+    # Calculate the total jet kinematics
+    jet_px = cst_px.sum(axis=-1)
+    jet_py = cst_py.sum(axis=-1)
+    jet_pz = cst_pz.sum(axis=-1)
+    jet_e = cst_e.sum(axis=-1)
+
+    # Calculate the total jet mass
+    jet_m = np.sqrt(np.maximum(jet_e**2 - jet_px**2 - jet_py**2 - jet_pz**2, 0))
+
+    return np.vstack([jet_px, jet_py, jet_pz, jet_m]).T
+
+
+def pxpypz_to_ptetaphi(kinematics: np.ndarray) -> np.ndarray:
+    """Convert from cartesian to ATLAS co-ordinates."""
+    # Split the kinematics into the different components
+    px = kinematics[..., 0:1]
+    py = kinematics[..., 1:2]
+    pz = kinematics[..., 2:3]
+
+    pt = np.sqrt(px**2 + py**2)
+    mtm = np.sqrt(px**2 + py**2 + pz**2)
+    eta = np.arctanh(np.clip(pz / (mtm + 1e-8), -0.9999, 0.9999))
+    phi = np.arctan2(py, px)
+
+    return np.concatenate([pt, eta, phi], axis=-1)

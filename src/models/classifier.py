@@ -8,6 +8,8 @@ from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
+from mltools.mltools.modules import IterativeNormLayer
+from mltools.mltools.transformers import Transformer
 
 if TYPE_CHECKING:
     from src.models.utils import JetBackbone
@@ -47,10 +49,10 @@ class Classifier(LightningModule):
             outp_dim=n_classes if n_classes > 2 else 1,
         )
 
-        # Loss and metrics
-        self.acc = Accuracy(
-            "multiclass" if n_classes > 2 else "binary", num_classes=n_classes
-        )
+        # Metrics
+        task = "multiclass" if n_classes > 2 else "binary"
+        self.train_acc = Accuracy(task, num_classes=n_classes)
+        self.valid_acc = Accuracy(task, num_classes=n_classes)
 
     def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor) -> tuple:
         x, mask = self.backbone(csts, csts_id, mask)
@@ -76,11 +78,12 @@ class Classifier(LightningModule):
             output = T.sigmoid(output)  # For the accuracy metric
 
         # Update the internal state of the accuracy metric
-        self.acc(output, labels)
+        acc = self.train_acc if prefix == "train" else self.valid_acc
+        acc(output, labels)
 
         # Log the loss and accuracy
         self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/acc", self.acc)
+        self.log(f"{prefix}/acc", acc)
 
         return loss
 
@@ -204,7 +207,8 @@ class CWoLaClassifier(Classifier):
         output = self.forward(csts, csts_id, mask)
 
         # Use the cwola labels for the loss
-        cwola_target = cwola_labels.float().view(output.shape)
+        cwola_target = cwola_labels.view(output.shape)
+        cwola_target = T.where(cwola_target.bool(), 0.99, 0.01)  # Label smoothing
         loss = binary_cross_entropy_with_logits(output, cwola_target)
 
         # Use the true labels for the accuracy
@@ -216,3 +220,105 @@ class CWoLaClassifier(Classifier):
         self.log(f"{prefix}/acc", self.acc)
 
         return loss
+
+
+class TopTagger(LightningModule):
+    """Classifier with an extra embedding layer for toptagging.
+
+    This should be paired with a scheduler for unfreezing/freezing the backbone.
+    """
+
+    def __init__(
+        self,
+        *,
+        data_sample: tuple,
+        n_classes: int,
+        backbone_path: str,
+        class_head: partial,
+        optimizer: partial,
+        scheduler: dict,
+    ) -> None:
+        super().__init__()
+        self.save_hyperparameters(logger=False)
+        self.n_classes = n_classes
+
+        # Load the pretrained and pickled JetBackbone object.
+        self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
+        self.backbone.csts_id_emb.requires_grad_(False)  # Freeze the csts_id embedding
+
+        # Single transformer layer for the extra variables
+        self.embedder = Transformer(
+            inpt_dim=3,
+            num_layers=1,
+            outp_dim=self.backbone.dim + 4,
+            dim=128,
+            do_input_linear=True,
+            do_output_linear=True,
+        )
+
+        # Create the head for the downstream task
+        # Use logistic regression for binary classification
+        self.jet_normaliser = IterativeNormLayer(5)
+        self.jet_embedder = nn.Linear(5, 16)
+        self.class_head = class_head(
+            inpt_dim=self.backbone.encoder.outp_dim,
+            outp_dim=1,
+            ctxt_dim=16,
+        )
+
+        # Loss and metrics
+        self.acc = Accuracy("binary")
+
+    def forward(self, csts: T.Tensor, mask: T.BoolTensor, jets: T.Tensor) -> tuple:
+        # Embed the extra variables
+        csts = csts[..., :3]
+        emb_1, csts_id = self.embedder(csts, mask=mask).split(
+            [4, self.backbone.dim], dim=-1
+        )
+        csts = T.cat([csts, emb_1], dim=-1)
+
+        # Pass through the backbone but without the csts_id embedding
+        x = self.backbone.csts_emb(csts) + csts_id
+        x = self.backbone.encoder(x, mask=mask)
+        mask = self.backbone.encoder.get_combined_mask(mask)
+
+        # Pass through the head using the jet kinematics as context
+        ctxt = self.jet_embedder(self.jet_normaliser(jets))
+        return self.class_head(x, mask=mask, ctxt=ctxt)
+
+    def _shared_step(self, sample: tuple, prefix: str) -> T.Tensor:
+        """Shared step used in both training and validaiton."""
+        # Unpack the sample
+        csts = sample["csts"]
+        labels = sample["labels"]
+        mask = sample["mask"]
+        jets = sample["jets"]
+
+        # Pass through the backbone and head
+        output = self.forward(csts, mask, jets)
+
+        # Get the loss by logistic regression with label smoothing
+        target = T.where(labels.bool(), 0.99, 0.01).view(output.shape)
+        loss = binary_cross_entropy_with_logits(output, target)
+
+        # Update the internal state of the accuracy metric
+        self.acc(T.sigmoid(output).squeeze(), labels)
+
+        # Log the loss and accuracy
+        self.log(f"{prefix}/total_loss", loss)
+        self.log(f"{prefix}/acc", self.acc)
+
+        return loss
+
+    def training_step(self, sample: tuple) -> T.Tensor:
+        return self._shared_step(sample, "train")
+
+    def validation_step(self, sample: tuple) -> T.Tensor:
+        return self._shared_step(sample, "valid")
+
+    def predict_step(self, sample: tuple) -> T.Tensor:
+        output = self.forward(sample["csts"], sample["mask"])[0]
+        return {"output": output, "label": sample["labels"].unsqueeze(-1)}
+
+    def configure_optimizers(self) -> dict:
+        return simple_optim_sched(self)

@@ -3,7 +3,6 @@ from functools import partial
 import pytorch_lightning as pl
 import torch as T
 from torch import nn
-from torch.nn.functional import cross_entropy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
 from mltools.mltools.transformers import Transformer
@@ -174,15 +173,6 @@ class MaskedParticleModelling(pl.LightningModule):
 
         # Pass through the decoder dont need registers after
         return self.encoder(x, mask=mask)[:, : x.size(1)]
-
-    def get_probe_loss(
-        self, encoder_outputs: T.Tensor, encoder_mask: T.BoolTensor, labels: T.Tensor
-    ) -> tuple:
-        """Run the linear classifier using the encoder outputs."""
-        class_out = self.classifier_head(encoder_outputs, mask=encoder_mask)
-        loss = cross_entropy(class_out, labels)
-        self.acc(class_out, labels)
-        return loss
 
     def full_encode(self, data: dict) -> T.Tensor:
         """Full forward pass for inference without null tokens."""

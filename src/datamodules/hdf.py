@@ -1,6 +1,5 @@
 """Pytorch Dataset definitions of various collections training samples."""
 
-import gc
 import logging
 from collections.abc import Callable
 from copy import deepcopy
@@ -9,15 +8,11 @@ from itertools import starmap
 from pathlib import Path
 from typing import Any
 
-import h5py
-import numpy as np
 import torch
-from pyparsing import Generator
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader, Dataset, IterableDataset, get_worker_info
-from tqdm import tqdm
+from torch.utils.data import DataLoader, Dataset
 
-from mltools.mltools.utils import batched, intersperse
+from mltools.mltools.utils import intersperse
 from src.datamodules.hdf_utils import HDFRead, get_file_list, load_h5_into_dict
 
 # This is to prevent the loaders from being killed when loading new files
@@ -47,7 +42,7 @@ JC_CLASS_TO_LABEL = {
 }
 
 
-class JetHDFBase:
+class JetMappable(Dataset):
     """The base class for loading jets stored as HDF datasets."""
 
     def __init__(
@@ -87,6 +82,8 @@ class JetHDFBase:
             The total number of jets in the dataset.
             If not provided, it is calculated from the files and the n_jets.
         """
+        super().__init__()
+
         # Processes and the number of jets must be a list for generality
         if isinstance(processes, str):
             if processes == "all":
@@ -129,13 +126,6 @@ class JetHDFBase:
             [nj] * nf for nj, nf in zip(self.n_jets, self.n_files, strict=False)
         ]
         self.njet_list = list(intersperse(*nj_per_proc))
-
-
-class JetMappable(Dataset, JetHDFBase):
-    """A pytorch mappable dataset for jets."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
 
         # Load the data from the root filess
         self.data_dict = load_h5_into_dict(
@@ -201,166 +191,9 @@ class JetCWola(Dataset):
         # Otherwise take from background which label is split in two
         else:
             sample = self.background[idx - self.n_signal]
-            sample["cwola_labels"] = idx % 2
+            sample["cwola_labels"] = idx % 2  # Odd becomes signal
             sample["labels"] = 0
         return sample
-
-
-class JetMappablePartial(Dataset, JetHDFBase):
-    """A pytorch mappable dataset that each epoch will load a portion of the jets.
-
-    Alternative to Iterable which keeps failing for some reason :(
-    Requires that the trainer is reinitialising the dataloaders each epoch
-    """
-
-    def __init__(self, files_per_epoch: int, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        assert files_per_epoch <= len(self.file_list)
-        self.max_idx = len(self.file_list) // files_per_epoch
-        self.files_per_epoch = files_per_epoch
-        self.data_dict = {}  # Initalised here for the delete in load_epoch
-        self.idx = -1
-        self.load_epoch(0)
-
-    def load_epoch(self, epoch: int) -> None:
-        """Load a set of files for the relevant epoch."""
-        # Check if the files need to be reloaded
-        if self.idx == (new_idx := epoch % self.max_idx):
-            return
-
-        # Clear the data_dict to prevent memory spike between each epoch
-        self.data_dict.clear()
-        del self.data_dict
-        gc.collect()  # Call the garbage collector
-
-        # Work out the slice of files to load from the list
-        self.idx = new_idx
-        start = self.files_per_epoch * self.idx
-        end = self.files_per_epoch * (self.idx + 1)
-        log.info(f"Current epoch count {epoch}, reading files {start} to {end}")
-
-        # Load the data from the hdf filess
-        self.data_dict = load_h5_into_dict(
-            file_list=self.file_list[slice(start, end)],
-            data_types=self.features,
-            n_samples=self.njet_list[slice(start, end)],
-            disable=False,
-            concatenate=False,
-        )
-        log.info(f"Loaded {len(self)} jets from {self.files_per_epoch} files")
-
-    def __len__(self) -> int:
-        return len(next(iter(self.data_dict.values())))
-
-    def __getitem__(self, idx: int) -> tuple:
-        """Retrieves an item and applies the pre-processing function."""
-        sample_dict = {k: v[idx] for k, v in self.data_dict.items()}
-        return self.transforms(sample_dict)
-
-
-class JetIterable(IterableDataset, JetHDFBase):
-    """A pytorch iterable dataset for jets."""
-
-    def __init__(
-        self,
-        *args,
-        files_per_buffer: int = 0,
-        shuffle: bool = False,
-        n_steps_per_epoch: int | None = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.files_per_buffer = files_per_buffer or len(self.processes)
-        self.shuffle = shuffle
-        self.n_total = self._count_samples()
-        self.n_steps_per_epoch = n_steps_per_epoch
-        log.info(f"Streaming {len(self)} jets from {len(self.file_list)} files")
-
-    def _count_samples(self) -> int:
-        """Counts the total number of samples in the entire dataset.
-
-        Relatively quick as there is no big I/O
-        """
-        total = 0
-        log.info("Counting the total number of samples in the dataset")
-        for file, njets in tqdm(
-            zip(self.file_list, self.njet_list, strict=False), total=sum(self.n_files)
-        ):
-            with h5py.File(file, mode="r") as f:
-                key = list(f.keys())[0]
-                n = len(f[key])
-            if njets is not None:
-                n = min(n, njets)
-            total += n
-        return total
-
-    def __len__(self) -> int:
-        return self.n_steps_per_epoch or self.n_total
-
-    def __iter__(self) -> Generator:
-        """Called seperately for each worker (thread).
-
-        - Divides up the file for each worker
-        - Loads 1 file per process at a time into a buffer
-        - Divides up the buffers into batches
-        - Returns each batch
-        """
-        # Check if we are using single-process vs multi process data loading
-        worker_info = get_worker_info()
-        worker_id = 0 if worker_info is None else worker_info.id
-        num_workers = 1 if worker_info is None else worker_info.num_workers
-
-        # Calculate which files this worker is responsible for
-        worker_files = np.array_split(self.file_list, num_workers)[worker_id]
-        worker_njets = np.array_split(self.njet_list, num_workers)[worker_id]
-
-        # Check that we have enough files for the shufflling
-        if self.shuffle and len(worker_files) < self.files_per_buffer:
-            log.warning(
-                "You have too many workers resulting in incomplete buffers. "
-                "If you are trying to shuffle your data this wont work!"
-            )
-
-        # Break them up into batches, each batch will be a buffer
-        batched_files = batched(worker_files, self.files_per_buffer)
-        batched_njets = batched(worker_njets, self.files_per_buffer)
-
-        # Cycle through the files grouped by buffer
-        for b_files, b_njets in zip(batched_files, batched_njets, strict=False):
-            # Load the data into a buffer
-            data_dict = load_h5_into_dict(
-                file_list=b_files,
-                data_types=self.features,
-                n_samples=b_njets,
-                disable=True,
-                concatenate=False,
-            )
-
-            # Generate an order from which to iterate through the buffer
-            len_buffer = len(next(iter(data_dict.values())))
-            if self.shuffle:
-                order = np.random.default_rng().permutation(len_buffer)
-            else:
-                order = np.arange(len_buffer)
-
-            # Yeild from the buffer one sampe at a time
-            for i in order:
-                sample_dict = {k: v[i] for k, v in data_dict.items()}
-                yield self.transforms(sample_dict)
-
-            # Delete the data_dict to prevent memory spike between each buffer
-            # Probably overkill with both clear and del, but both seem to be needed?
-            sample_dict.clear()
-            data_dict.clear()
-            del data_dict
-            del sample_dict
-            gc.collect()
-
-        # Final task of 1st worker is to shuffle the file order for the next epoch
-        # if self.shuffle and worker_id == 0:
-        #     for fl in self.files_per_proc:
-        #         random.shuffle(fl)
-        #     self.file_list = intersperse(*self.files_per_proc)
 
 
 class JetDataModule(LightningDataModule):
@@ -378,9 +211,6 @@ class JetDataModule(LightningDataModule):
         self.loader_config = loader_config
         self.n_classes = self.valid_set.n_classes
 
-        # Make the datamodule stateful as it helps with checkpointing
-        self.state = {"epoch": -1}
-
     def setup(self, stage: str) -> None:
         """Sets up the relevant datasets."""
         if stage in {"fit", "train"}:
@@ -388,29 +218,21 @@ class JetDataModule(LightningDataModule):
         if stage in {"predict", "test"}:
             self.test_set = self.hparams.test_set()
 
-    def state_dict(self) -> dict:
-        return self.state
-
-    def load_state_dict(self, state_dict: dict) -> None:
-        return self.state.update(state_dict)
+    def get_dataloader(self, dataset: Dataset, flag: str) -> DataLoader:
+        kwargs = deepcopy(self.loader_config)
+        if flag != "train":
+            kwargs["drop_last"] = False
+            kwargs["shuffle"] = False
+        return DataLoader(dataset, **kwargs)
 
     def train_dataloader(self) -> DataLoader:
-        self.state["epoch"] += 1
-        if hasattr(self.train_set, "load_epoch"):
-            self.train_set.load_epoch(self.state["epoch"])
-        return DataLoader(self.train_set, **self.loader_config)
+        return self.get_dataloader(self.train_set, "train")
 
     def val_dataloader(self) -> DataLoader:
-        val_config = deepcopy(self.loader_config)
-        val_config["drop_last"] = False
-        val_config["shuffle"] = False
-        return DataLoader(self.valid_set, **val_config)
+        return self.get_dataloader(self.valid_set, "valid")
 
     def test_dataloader(self) -> DataLoader:
-        test_config = deepcopy(self.loader_config)
-        test_config["drop_last"] = False
-        test_config["shuffle"] = False
-        return DataLoader(self.test_set, **test_config)
+        return self.get_dataloader(self.test_set, "test")
 
     def predict_dataloader(self) -> DataLoader:
         return self.test_dataloader()

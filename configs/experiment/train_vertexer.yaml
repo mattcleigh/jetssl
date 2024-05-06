@@ -15,21 +15,23 @@ trainer:
   max_epochs: null
   max_steps: 50_000
 
+# We use the ARI performance on b jets for early stopping
+callbacks:
+  early_stopping:
+    monitor: valid/ari_2
+    mode: max
+
 # Key parameters for fine-tuning
 n_jets: 600_000 # Max in shomi
 
 # Never finetune on the full dataset, always 1 file and n_jets
+# For shlomi use full val and test
 datamodule:
   train_set:
     n_files: 1
     n_jets_total: ${n_jets}
-  val_set:
-    n_files: 1
-    n_jets_total: ${n_jets}
-  test_set:
-    n_files: 1
   loader_config:
-    batch_size: 1024 # Shlomi is only 15 particles, we can handle that
+    batch_size: 500
     num_workers: 2
 
 # Bookkeeping

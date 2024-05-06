@@ -5,6 +5,7 @@ import rootutils
 root = rootutils.setup_root(search_from=".", pythonpath=True)
 
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
 from torch.utils.data import DataLoader
 
@@ -35,6 +36,7 @@ sh_data = JetMappable(
     n_files=1,
     transforms=pipeline,
 )
+print(len(sh_data))
 sh_labels = ["light", "charm", "bottom"]
 
 jc_data = JetMappable(
@@ -47,6 +49,41 @@ jc_data = JetMappable(
 )
 jc_labels = list(JC_CLASS_TO_LABEL.keys())
 cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
+cst_labels = [
+    r"$p_\text{T}$",
+    r"$\Delta\eta$",
+    r"$\Delta\phi$",
+    r"$d0$",
+    r"$\sigma(d0)$",
+    r"$z0$",
+    r"$\sigma(z0)$",
+]
+
+
+# Plot distributions of the constituents
+jc_csts = jc_data.data_dict["csts"][jc_data.data_dict["mask"]]
+sh_csts = sh_data.data_dict["csts"][sh_data.data_dict["mask"]]
+
+# Make the neutral jc impact parameters nans
+is_neut = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]]
+is_neut = (is_neut == 0) | (is_neut == 2)
+jc_csts[is_neut, 3:] = np.nan
+
+for i in range(len(cst_features)):
+    plot_multi_hists(
+        data_list=[jc_csts[:, i : i + 1], sh_csts[:, i : i + 1]],
+        fig_height=4,
+        data_labels=["JetClass", "SVFD"],
+        bins=25,
+        logy=True,
+        ignore_nans=True,
+        incl_overflow=False,
+        incl_underflow=False,
+        col_labels=[cst_labels[i]],
+        legend_kwargs={"loc": "upper right"},
+        path=root / f"plots/data/{cst_features[i]}.pdf",
+        do_norm=True,
+    )
 
 
 # Split the datasets into seperate lists based on the labels
@@ -70,7 +107,7 @@ plot_multi_hists(
     bins=51,
     logy=True,
     col_labels=cst_features,
-    path=root / "plots/shlomi.png",
+    path=root / "plots/data/shlomi.png",
     do_norm=True,
 )
 
@@ -80,21 +117,45 @@ plot_multi_hists(
     bins=51,
     logy=True,
     col_labels=cst_features,
-    path=root / "plots/jetclass.png",
+    path=root / "plots/data/jetclass.png",
     do_norm=True,
 )
 
 # Plot the distribution of the constituent id values
+id_types = [
+    "$\\gamma$\n0",
+    "hadron\n-1",
+    "hadron\n0",
+    "hadron\n+1",
+    "$e$\n-1",
+    "$e$\n+1",
+    "$\\mu$\n-1",
+    "$\\mu$\n+1",
+]
 sh_csts_id = sh_data.data_dict["csts_id"][sh_data.data_dict["mask"]][..., None]
 jc_csts_id = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]][..., None]
-plot_multi_hists(
-    data_list=[jc_csts_id, sh_csts_id],
-    logy=True,
-    data_labels=["JetClass", "Shlomi"],
-    col_labels=["particle id"],
-    path=root / "plots/csts_id.png",
-    do_norm=True,
-)
+sh_counts = np.unique(sh_csts_id, return_counts=True)[1].astype("f")
+jc_counts = np.unique(jc_csts_id, return_counts=True)[1].astype("f")
+sh_counts /= sh_counts.sum()
+jc_counts /= jc_counts.sum()
+sh_counts = np.insert(sh_counts, [0, 1], [0, 0])
+counts = {"JetClass": jc_counts, "SVFD": sh_counts}
+x = np.arange(8)
+width = 0.3
+multiplier = -0.5
+fig, ax = plt.subplots(figsize=(6, 4))
+for attribute, measurement in counts.items():
+    offset = width * multiplier
+    rects = ax.bar(x + offset, measurement, width, label=attribute)
+    multiplier += 1
+ax.set_ylabel("a.u")
+ax.set_xticks(x, id_types)
+ax.legend(loc="upper right")
+ax.set_yscale("log")
+fig.tight_layout()
+plt.savefig(root / "plots/data/csts_id.pdf")
+plt.close()
+
 
 # Define dataloaders which will apply the preprocessing pipeline
 sh_data.transforms = pipeline
@@ -130,6 +191,6 @@ plot_multi_hists(
     logy=True,
     data_labels=["JetClass", "Shlomi"],
     col_labels=cst_features,
-    path=root / "plots/batch.png",
+    path=root / "plots/data/batch.png",
     do_norm=True,
 )

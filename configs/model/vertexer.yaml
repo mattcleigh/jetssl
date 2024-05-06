@@ -6,6 +6,7 @@ pos_weight: 0.7825 # Calculated from shlomi ratio
 vertex_config:
   num_blocks: 3
   hddn_dim: 256
+  dropout: 0.2
   norm: LayerNorm
 
 defaults:

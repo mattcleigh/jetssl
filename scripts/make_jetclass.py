@@ -66,9 +66,6 @@ def main() -> None:
 
     # Loop over the subfolders
     for subfolder in subfolders:
-        if "test" not in str(subfolder):
-            continue
-
         print(f"Processing {subfolder.name}")
 
         # Copy the subfolder to the destination path
@@ -77,6 +74,14 @@ def main() -> None:
         # Make the folder
         Path(dest_folder).mkdir(parents=True, exist_ok=True)
         files = list(subfolder.glob("*.root"))
+
+        # Sort the files based the number in the name
+        files = sorted(files, key=lambda x: int(x.name.split("_")[-1].split(".")[0]))
+
+        # Only process the 50 training files TODO remove this
+        if "train" not in str(subfolder):
+            continue
+        files = files[:50]
 
         # Loop through the files in the subfolder and load the information
         for file in tqdm(files):

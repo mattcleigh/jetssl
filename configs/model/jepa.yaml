@@ -18,6 +18,6 @@ predictor_config:
 defaults:
   - encoder_config: small.yaml
   - optimizer: default.yaml
-  - scheduler: cosine.yaml
+  - scheduler: warmup_decay.yaml
   - class_head: ca.yaml
   - _self_
