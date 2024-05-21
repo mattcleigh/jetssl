@@ -51,7 +51,6 @@ def main(cfg: DictConfig):
                     output = T.from_numpy(f["output"][:])
                     mask = T.from_numpy(f["mask"][:])
                     vtx_id = T.from_numpy(f["vtx_id"][:])
-                    _labels = T.from_numpy(f["labels"][:]).squeeze()
             except FileNotFoundError:
                 continue
 

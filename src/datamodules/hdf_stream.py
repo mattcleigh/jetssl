@@ -25,9 +25,6 @@ class BatchSampler(Sampler):
     ):
         """Batch sampler for an h5 dataset.
 
-        The batch sampler performs weak shuffling. Objects are batched first,
-        and then batches are shuffled.
-
         Parameters
         ----------
         dataset : torch.data.Dataset

@@ -3,9 +3,10 @@
 defaults:
   # Uncomment which tasks you want to run
   ######################
-  - /model/tasks/id
+  # - /model/tasks/id
   # - /model/tasks/reg
-  - /model/tasks/kmeans
+  # - /model/tasks/kmeans
+  - /model/tasks/vae
   # - /model/tasks/diff
   # - /model/tasks/flow
   - /model/tasks/probe # Keep this on for benchmarking
@@ -14,9 +15,10 @@ defaults:
   - override /model: mpm
 
 trainer:
-  max_steps: 1000_000
-  val_check_interval: 5000
+  max_steps: 1100_000
+  val_check_interval: 10_000
 
 # Model modifications
 project_name: jetssl2
-network_name: test
+network_name: vae2
+full_resume: False

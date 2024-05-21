@@ -231,6 +231,28 @@ class KmeansTask(TaskBase):
         self.kmeans.fit(inputs)
 
 
+class VQVAETask(TaskBase):
+    """Task for distilation using a pretrained vq-vae."""
+
+    def __init__(self, parent: nn.Module, vae_path: str, **kwargs) -> None:
+        super().__init__(input_dim=parent.outp_dim, **kwargs)
+        self.vae = T.load(vae_path, map_location=parent.device)
+        self.head = nn.Linear(self.input_dim, self.vae.quantizer.codebook_size)
+
+        # Make sure that the vae is not trainable
+        self.vae.requires_grad_(False)
+        self.vae.eval()
+
+    def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
+        """Get the loss for this task."""
+        # Get the target using the vae and the original csts
+        target = self.vae(data["csts"], data["null_mask"])[0].long()
+
+        # Get the predictions and calculate the loss
+        pred = self.head(self.get_head_input(data))
+        return cross_entropy(pred, target, label_smoothing=0.05)
+
+
 class DiffTask(TaskBase):
     """Use conditional diffusion to model the properties of the constituent."""
 
@@ -264,7 +286,8 @@ class ProbeTask(TaskBase):
     def __init__(self, parent: nn.Module, class_head: partial, **kwargs) -> None:
         super().__init__(input_dim=parent.encoder.dim, **kwargs)
         self.head = class_head(inpt_dim=parent.encoder.dim, outp_dim=parent.n_classes)
-        self.acc = Accuracy("multiclass", num_classes=parent.n_classes)
+        self.train_acc = Accuracy("multiclass", num_classes=parent.n_classes)
+        self.valid_acc = Accuracy("multiclass", num_classes=parent.n_classes)
 
     def _get_loss(self, parent: nn.Module, data: dict, prefix: str) -> T.Tensor:
         """Get the loss for this task."""
@@ -274,7 +297,8 @@ class ProbeTask(TaskBase):
         loss = cross_entropy(preds, data["labels"])
 
         # Update and log the accuracy
-        self.acc(preds, data["labels"])
-        parent.log(f"{prefix}/{self.name}_accuracy", self.acc)
+        acc = getattr(self, f"{prefix}_acc")
+        acc(preds, data["labels"])
+        parent.log(f"{prefix}/{self.name}_accuracy", acc)
 
         return loss

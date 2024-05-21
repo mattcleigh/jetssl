@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - override /datamodule: jetclass_masked
+  - override /model: vqvae
+
+# Turn off masking
+datamodule:
+  transforms:
+    - _target_: src.datamodules.preprocessing.preprocess
+      _partial_: true
+      fn:
+        _target_: joblib.load
+        filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+
+trainer:
+  max_steps: 200_000
+  val_check_interval: 10_000
+
+# Model modifications
+project_name: jetssl2
+network_name: vqvae

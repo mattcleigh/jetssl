@@ -5,5 +5,5 @@ backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.
 defaults:
   - optimizer: default.yaml
   - scheduler: cosine.yaml
-  - class_head: ca.yaml
+  - class_head: ca_with_drop.yaml
   - _self_

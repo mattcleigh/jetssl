@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 import torch as T
 from pytorch_lightning import LightningModule
 from torch import nn
-from torch.nn.functional import binary_cross_entropy_with_logits
 from torchmetrics import Accuracy, F1Score
 
 from mltools.mltools.lightning_utils import simple_optim_sched
+from mltools.mltools.loss import bce_with_label_smoothing
 from mltools.mltools.mlp import MLP
 
 if TYPE_CHECKING:
@@ -149,27 +149,16 @@ class Vertexer(LightningModule):
 
         # Calculate the target based on if the vtx id matches
         target = vtx_id.unsqueeze(1) == vtx_id.unsqueeze(2)
-        targ_masked = T.where(target[vtx_mask], 0.99, 0.01)  # Label smoothing
+        targ_masked = target[vtx_mask].float()
 
         # Pass through the backbone and head
         output = self.forward(csts, csts_id, mask).squeeze(-1)
 
         # Calculate the loss and log
-        loss = binary_cross_entropy_with_logits(
-            output[vtx_mask],
-            targ_masked,
-            pos_weight=self.pos_weight,
-        )
+        loss = bce_with_label_smoothing(output[vtx_mask], targ_masked, self.pos_weight)
         self.log(f"{prefix}/total_loss", loss)
 
-        # Metrics and logging
-        metrics = self.train_metrics if prefix == "train" else self.valid_metrics
-        metrics["acc"](T.sigmoid(output[vtx_mask]), targ_masked)
-        metrics["f1"](T.sigmoid(output[vtx_mask]), targ_masked)
-        self.log(f"{prefix}/acc", metrics["acc"])
-        self.log(f"{prefix}/f1", metrics["f1"])
-
-        # Extra metrics for validation only
+        # Custom Metrics per class
         if prefix == "valid":
             for i in range(self.n_classes):  # Metric calculated per class
                 c_mask = labels == i
@@ -177,6 +166,12 @@ class Vertexer(LightningModule):
                 ari = get_ari(mask[c_mask], vtx_id[c_mask], output[c_mask]).mean()
                 self.log(f"{prefix}/perf_{i}", perf)
                 self.log(f"{prefix}/ari_{i}", ari)
+
+        # Standard Metrics
+        metrics = getattr(self, f"{prefix}_metrics")
+        for k in metrics:
+            metrics[k](T.sigmoid(output[vtx_mask]), targ_masked)
+            self.log(f"{prefix}/{k}", metrics[k])
 
         return loss
 

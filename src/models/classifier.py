@@ -8,6 +8,7 @@ from torch.nn.functional import binary_cross_entropy_with_logits, cross_entropy
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
+from mltools.mltools.loss import bce_with_label_smoothing
 from mltools.mltools.modules import IterativeNormLayer
 from mltools.mltools.transformers import Transformer
 
@@ -73,12 +74,12 @@ class Classifier(LightningModule):
         if self.n_classes > 2:
             loss = cross_entropy(output, labels, label_smoothing=0.1)
         else:
-            target = labels.float().view(output.shape)
-            loss = binary_cross_entropy_with_logits(output, target)
+            target = labels.float().view_as(output)
+            loss = bce_with_label_smoothing(output, target)
             output = T.sigmoid(output)  # For the accuracy metric
 
-        # Update the internal state of the accuracy metric
-        acc = self.train_acc if prefix == "train" else self.valid_acc
+        # Calculate the accuracy
+        acc = getattr(self, f"{prefix}_acc")
         acc(output, labels)
 
         # Log the loss and accuracy
@@ -141,9 +142,9 @@ class OnlyHeadClass(LightningModule):
         self.ctst_embedder = nn.Linear(self.csts_dim, self.class_head.dim)
 
         # Loss and metrics
-        self.acc = Accuracy(
-            "multiclass" if n_classes > 2 else "binary", num_classes=n_classes
-        )
+        task = "multiclass" if n_classes > 2 else "binary"
+        self.trian_acc = Accuracy(task, num_classes=n_classes)
+        self.valid_acc = Accuracy(task, num_classes=n_classes)
 
     def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.BoolTensor) -> tuple:
         x = self.ctst_embedder(csts) + self.csts_id_embedder(csts_id)
@@ -168,12 +169,13 @@ class OnlyHeadClass(LightningModule):
             loss = binary_cross_entropy_with_logits(output, target)
             output = T.sigmoid(output)  # For the accuracy metric
 
-        # Update the internal state of the accuracy metric
-        self.acc(output, labels)
+        # Update the accuracy
+        acc = getattr(self, f"{prefix}_acc")
+        acc(output, labels)
 
-        # Log the loss and accuracy
+        # Log
         self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/acc", self.acc)
+        self.log(f"{prefix}/acc", acc)
 
         return loss
 
@@ -206,18 +208,18 @@ class CWoLaClassifier(Classifier):
         # Pass through the network
         output = self.forward(csts, csts_id, mask)
 
-        # Use the cwola labels for the loss
-        cwola_target = cwola_labels.view(output.shape)
-        cwola_target = T.where(cwola_target.bool(), 0.99, 0.01)  # Label smoothing
-        loss = binary_cross_entropy_with_logits(output, cwola_target)
+        # Use the cwola labels for the loss with label smoothing
+        cwola_target = cwola_labels.float().view(output.shape)
+        loss = bce_with_label_smoothing(output, cwola_target)
 
         # Use the true labels for the accuracy
         true_target = labels.view(output.shape)
-        self.acc(T.sigmoid(output), true_target)
+        acc = getattr(self, f"{prefix}_acc")
+        acc(T.sigmoid(output), true_target)
 
-        # Log the loss and accuracy
+        # Log
         self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/acc", self.acc)
+        self.log(f"{prefix}/acc", acc)
 
         return loss
 
@@ -267,7 +269,8 @@ class TopTagger(LightningModule):
         )
 
         # Loss and metrics
-        self.acc = Accuracy("binary")
+        self.train_acc = Accuracy("binary")
+        self.valid_acc = Accuracy("binary")
 
     def forward(self, csts: T.Tensor, mask: T.BoolTensor, jets: T.Tensor) -> tuple:
         # Embed the extra variables
@@ -298,15 +301,16 @@ class TopTagger(LightningModule):
         output = self.forward(csts, mask, jets)
 
         # Get the loss by logistic regression with label smoothing
-        target = T.where(labels.bool(), 0.99, 0.01).view(output.shape)
-        loss = binary_cross_entropy_with_logits(output, target)
+        loss = bce_with_label_smoothing(output, labels.float())
+        output = T.sigmoid(output).squeeze()  # For the accuracy metric
 
         # Update the internal state of the accuracy metric
-        self.acc(T.sigmoid(output).squeeze(), labels)
+        acc = getattr(self, f"{prefix}_acc")
+        acc(output, labels)
 
         # Log the loss and accuracy
         self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/acc", self.acc)
+        self.log(f"{prefix}/acc", acc)
 
         return loss
 

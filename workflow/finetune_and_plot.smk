@@ -25,7 +25,7 @@ backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0, 1, 2, 3]
+seeds = [0]
 
 # Define the model backbones to finetune
 model_names = ["kmeans", "diff", "flow", "untrained"]
@@ -58,7 +58,7 @@ for dt in dt_names:
 
     # For the cwola task, we need much less jets!
     if dt == "cwola":
-        n_jets = [1e3, 3162, 1e4, 31623, 1e5]
+        n_jets = [5e2, 1e3, 5e3, 1e4, 1e5]
     # For the vertexing task, we use all jets only
     elif dt == "vtx":
         n_jets = [1e6]

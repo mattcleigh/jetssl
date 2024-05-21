@@ -61,6 +61,9 @@ class MaskedParticleModelling(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters(logger=False)
 
+        # Make sure the tasks dict is not empty
+        assert tasks, "No tasks were provided."
+
         # Break down the data sample into the dimensions needed for the model
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
@@ -171,8 +174,9 @@ class MaskedParticleModelling(pl.LightningModule):
         # Insert the null tokens so they are ordered wrt each other
         x[null_mask] = nt[null_sorted].type(x.dtype)
 
-        # Pass through the decoder dont need registers after
-        return self.encoder(x, mask=mask)[:, : x.size(1)]
+        # Pass through the encoder dont need registers after
+        n_reg = self.encoder.num_registers
+        return self.encoder(x, mask=mask)[:, n_reg:]
 
     def full_encode(self, data: dict) -> T.Tensor:
         """Full forward pass for inference without null tokens."""

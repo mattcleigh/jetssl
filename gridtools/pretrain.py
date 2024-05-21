@@ -8,7 +8,7 @@ from mltools.mltools.utils import standard_job_array
 def main() -> None:
     """Main executable script."""
     standard_job_array(
-        job_name="pretraining",
+        job_name="pretraining2",
         work_dir=root / "scripts",
         log_dir=root / "logs",
         image_path="/srv/fast/share/rodem/images/jetssl_latest.sif",
@@ -21,14 +21,14 @@ def main() -> None:
         mem_gb=40,
         opt_dict={
             "network_name": [
-                # "reg_c",
-                # "kmeans_c",
-                "diff_c",
-                "flow_c",
+                "reg2",
+                "kmeans2",
+                "diff2",
+                "flow2",
             ],
             "+model/tasks": [
-                # "[reg,id,probe]",
-                # "[kmeans,id,probe]",
+                "[reg,id,probe]",
+                "[kmeans,id,probe]",
                 "[diff,id,probe]",
                 "[flow,id,probe]",
             ],

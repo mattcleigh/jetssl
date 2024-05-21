@@ -1,0 +1,25 @@
+_target_: src.models.vae.JetVQVAE
+
+encoder_config:
+  dim: 128
+  num_layers: 3
+  do_packed: True
+  num_registers: 8
+  do_final_norm: True
+  layer_config:
+    num_heads: 8
+    ff_mult: 2
+
+quantizer_config:
+  codebook_size: 1024
+  codebook_dim: 32
+  use_cosine_sim: True
+  kmeans_init: True
+  kmeans_iters: 50
+  threshold_ema_dead_code: 2
+
+defaults:
+  - optimizer: default.yaml
+  - scheduler: cosine.yaml
+  - class_head: ca.yaml
+  - _self_

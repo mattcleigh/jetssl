@@ -16,6 +16,7 @@ flash-attn==2.5.7
 # fast clusering and kmeans
 cupy-cuda12x==13.1.0
 torchpq==0.3.0.6
+vector-quantize-pytorch==1.14.19
 
 # general data handling
 pandas==2.2.2

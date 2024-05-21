@@ -3,6 +3,7 @@
 defaults:
   - override /datamodule: jetclass_masked
   - override /model: mpm
+  - override /model/scheduler: cosine
 
 csts_dim: 3
 datamodule:
@@ -12,22 +13,21 @@ datamodule:
     csts_dim: ${csts_dim}
   test_set:
     csts_dim: ${csts_dim}
-  loader_config:
-    batch_size: 1000
 
-# Only use BERT model with no registers or ID
+trainer:
+  max_steps: 200_000
+  val_check_interval: 5000
+
+# Base = BERT model with no registers or ID
 model:
   do_mae: False
   use_id: False
   encoder_config:
     num_registers: 0
-
-# Allows us to use the partially mappable datasets
-trainer:
-  max_epochs: -1 # Run indefinitely
-  reload_dataloaders_every_n_epochs: 5
-  check_val_every_n_epoch: 5
+  scheduler:
+    warmup_steps: 10_000
 
 # Model modifications
 project_name: jetssl2
 network_name: mpm
+tags: ["ablation"]

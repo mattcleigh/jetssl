@@ -6,7 +6,7 @@ flow:
   weight: 1.0
   detach: False
   apply_every: 1
-  id_conditional: True
+  id_conditional: False
   id_embed_dim: 64
 
   embed_dim: 128

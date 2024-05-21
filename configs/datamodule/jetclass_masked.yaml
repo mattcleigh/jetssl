@@ -22,7 +22,7 @@ test_set:
 
 num_workers: 10
 batch_size: 1000
-pin_memory:
+pin_memory: True
 transforms:
   - _target_: src.datamodules.preprocessing.batch_masking
     _partial_: true

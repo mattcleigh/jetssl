@@ -160,6 +160,7 @@ class JetDINO(pl.LightningModule):
         class_head: partial,
         embed_dim: int = 4096,
         t_ema: float = 0.992,
+        backbone_path: str | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -170,9 +171,17 @@ class JetDINO(pl.LightningModule):
         self.embed_dim = embed_dim
         self.t_ema = t_ema
 
-        # The student and teacher models with their projection heads
-        self.student = JetEncoder(csts_dim=self.csts_dim, encoder_config=encoder_config)
-        self.teacher = JetEncoder(csts_dim=self.csts_dim, encoder_config=encoder_config)
+        # The student and teacher models
+        if backbone_path is not None:
+            self.student = T.load(backbone_path)
+            self.teacher = T.load(backbone_path)
+        else:
+            self.student = JetEncoder(
+                csts_dim=self.csts_dim, encoder_config=encoder_config
+            )
+            self.teacher = JetEncoder(
+                csts_dim=self.csts_dim, encoder_config=encoder_config
+            )
         self.teacher.requires_grad_(False)  # Teacher is an EMA of student
 
         # Save the dimensions used in the student
@@ -192,7 +201,8 @@ class JetDINO(pl.LightningModule):
 
         # Basic classifier and accuracy for evaluating encoder
         self.class_head = class_head(inpt_dim=self.outp_dim, outp_dim=n_classes)
-        self.acc = Accuracy("multiclass", num_classes=n_classes)
+        self.train_acc = Accuracy("multiclass", num_classes=n_classes)
+        self.valid_acc = Accuracy("multiclass", num_classes=n_classes)
 
     def _shared_step(self, sample: T.Tensor, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
@@ -235,8 +245,11 @@ class JetDINO(pl.LightningModule):
         if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.class_head(e_t.detach(), mask=e_mask.detach())
             probe_loss = cross_entropy(class_out, labels)
-            self.acc(class_out, labels)  # Updates internal state
-            self.log(f"{prefix}/probe_accuracy", self.acc)
+
+            # Log the probe accuracy
+            acc = getattr(self, f"{prefix}_acc")
+            acc(class_out, labels)
+            self.log(f"{prefix}/probe_accuracy", acc)
         else:
             probe_loss = T.zeros(1, device=self.device)
 

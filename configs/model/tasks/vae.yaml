@@ -1,0 +1,12 @@
+# Need to be a dictionary itself to run with python train.py +model/tasks=vae
+vae:
+  _target_: src.models.mpm_tasks.VQVAETask
+  _partial_: True
+
+  weight: 1.0
+  detach: False
+  apply_every: 1
+  id_conditional: False
+  id_embed_dim: 64
+
+  vae_path: /home/users/l/leighm/jetssl/resources/vqvae.pkl

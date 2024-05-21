@@ -159,21 +159,22 @@ class JetCWola(Dataset):
     ) -> None:
         # Needed for the model init
         self.n_classes = 2
+        log.info(f"Loading {num_signal} signal and {num_background} background jets")
 
         # Load the signal and background datasets
         self.signal = JetMappable(
             n_classes=1,
             processes=signal_process,
-            n_files=10,  # Distribute among 10 files
-            n_jets=num_signal // 10,
+            n_files=5,  # Distribute among 5 files
+            n_jets=num_signal // 5,
             **kwargs,
         )
         self.n_signal = len(self.signal)
         self.background = JetMappable(
             n_classes=1,
             processes=background_process,
-            n_files=10,  # Distribute among 10 files
-            n_jets=num_background // 10,
+            n_files=5,  # Distribute among 5 files
+            n_jets=num_background // 5,
             **kwargs,
         )
         self.n_background = len(self.background)
@@ -194,6 +195,11 @@ class JetCWola(Dataset):
             sample["cwola_labels"] = idx % 2  # Odd becomes signal
             sample["labels"] = 0
         return sample
+
+
+# Placeholder because some of the older checkpoints dont work without it
+class JetMappablePartial:
+    pass
 
 
 class JetDataModule(LightningDataModule):

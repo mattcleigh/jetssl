@@ -5,6 +5,6 @@ defaults:
   - paths: default.yaml
   - _self_
 
-project_name: jetssl_finetune
-network_name: cwola_50000
+project_name: jetssl_finetune2
+network_name: cwola_kmeans_3162_3
 ckpt_flag: best.ckpt

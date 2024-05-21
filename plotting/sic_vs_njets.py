@@ -61,6 +61,10 @@ def main(cfg: DictConfig):
 
     # Sort the dataframe by the number of samples
     df = df.sort_values(by="n_samples")
+    df = df.reset_index(drop=True)
+
+    # Drop index 10
+    # df = df.drop(index=10)
 
     # Make the plots
     fig, ax = plt.subplots(figsize=(5, 5))
@@ -77,7 +81,7 @@ def main(cfg: DictConfig):
 
         # Plot the data
         line = ax.plot(
-            data["n_samples"],
+            data["n_samples"] // 2,
             data["sic"]["mean"],
             "-o",
             label=m,
@@ -85,7 +89,7 @@ def main(cfg: DictConfig):
 
         # Add shaded region for the std if defined
         ax.fill_between(
-            data["n_samples"],
+            data["n_samples"] // 2,
             data["sic"]["min"],
             data["sic"]["max"],
             alpha=0.2,
