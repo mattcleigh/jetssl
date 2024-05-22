@@ -45,6 +45,7 @@ To run this project, follow these steps:
     1. JetClass
         * Download from `https://zenodo.org/records/6619768`
         * Convert using `scripts/make_jetclass.py`
+        * Create single large streamable files using `combine_jetclass.py`
     2. Secondary Vertex Finding in Jets Dataset (Shlomi)
         * Download from `https://zenodo.org/records/4044628`
         * Convert using `scripts/make_shlomi.py`
