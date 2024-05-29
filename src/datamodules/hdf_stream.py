@@ -78,7 +78,7 @@ class JetHDFStream(Dataset):
         n_classes: int,
         features: list[list] | None = None,
         csts_dim: int | None = None,
-        n_jets: int | list | None = None,
+        n_jets: int | list = 0,
         transforms: Callable | list = identity,
     ) -> None:
         """Parameters
@@ -91,7 +91,7 @@ class JetHDFStream(Dataset):
         n_classes : int
             The number of classes in the dataset. Purely for convenience.
             Is not actually used in the class.
-        n_jets_total : int or None, optional
+        n_jets: int or None, optional
             The total number of jets in the dataset.
         transforms : partial
             A callable function to apply during the getitem method
@@ -120,7 +120,10 @@ class JetHDFStream(Dataset):
         self.n_classes = n_classes
         self.file = h5py.File(path, mode="r")
         self.features = list(starmap(HDFRead, features))
-        self.n_jets = n_jets or len(next(iter(self.file.values())))
+
+        # Set the number of jets (if not set, use all jets in the file)
+        n_jets_in_file = len(next(iter(self.file.values())))
+        self.n_jets = min(n_jets, n_jets_in_file) or n_jets_in_file
 
         # Save the preprocessing as a list
         if not isinstance(transforms, list):

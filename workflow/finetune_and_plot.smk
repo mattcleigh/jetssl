@@ -19,7 +19,7 @@ container: config["container_path"]
 ########################################
 
 # Define important paths
-project_name = "jetssl_finetune2"
+project_name = "jetssl_finetune_paper"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
 backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
@@ -28,18 +28,15 @@ plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 seeds = [0]
 
 # Define the model backbones to finetune
-model_names = ["kmeans", "diff", "flow", "untrained"]
+model_names = ["reg", "vae", "kmeans", "diff", "flow", "untrained"]
 
 # Define the finetuning tasks
 downstream_tasks = {
-    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
+    "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
     # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
     # "vtx": ["experiment=train_vertexer"],
-    "cwola": ["experiment=train_cwola"],
+    # "cwola": ["experiment=train_cwola"],
 }
-
-# Define the number of jets to finetune on
-n_jets = [1e3, 1e4, 1e5, 1e6]
 
 ########################################
 
@@ -56,6 +53,9 @@ rule all:
 # For each downstream task make a rule to plot, export and finetune
 for dt in dt_names:
 
+    # Standard classification we want the full dataset
+    if dt == "jetclass":
+        n_jets = [1e4, 1e5, 1e6, 1e7, 1e8]
     # For the cwola task, we need much less jets!
     if dt == "cwola":
         n_jets = [5e2, 1e3, 5e3, 1e4, 1e5]
