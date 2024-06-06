@@ -1,0 +1,16 @@
+_target_: src.models.tracker.Tracker
+
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/vae.pkl
+
+mlp_config:
+  num_blocks: 1
+  hddn_dim: 256
+  dropout: 0.2
+  norm: LayerNorm
+
+class_weights: [2.7303, 0.3826, 3.2895, 1.3960]
+
+defaults:
+  - optimizer: default.yaml
+  - scheduler: cosine.yaml
+  - _self_

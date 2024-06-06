@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import torch as T
 from sklearn.base import BaseEstimator
@@ -5,7 +7,7 @@ from torch.nn.functional import pad
 from torch.utils.data.dataloader import default_collate
 
 
-def preprocess(jet_dict: dict, fn: BaseEstimator) -> dict:
+def preprocess(jet_dict: dict[np.ndarray], fn: BaseEstimator) -> dict:
     """Preprocess a jet dict using a sklearn transformer.
 
     Works on both single and batched jets.
@@ -41,8 +43,14 @@ def preprocess(jet_dict: dict, fn: BaseEstimator) -> dict:
     return jet_dict
 
 
-def batch_masking(jet_dict: dict, fn: callable, key: str = "null_mask") -> dict:
+def batch_masking(
+    jet_dict: dict[np.ndarray], fn: callable, key: str = "null_mask"
+) -> dict:
     """Applies a masking function of a batch of jets."""
+    # If the data is a list of dicts
+    if isinstance(jet_dict, list):
+        return [batch_masking(jet, fn, key) for jet in jet_dict]
+
     assert all(k in jet_dict for k in ["csts", "mask"])
 
     # If the data is batched
@@ -60,7 +68,7 @@ def batch_masking(jet_dict: dict, fn: callable, key: str = "null_mask") -> dict:
     return jet_dict
 
 
-def batch_preprocess(batch: list, fn: BaseEstimator) -> dict:
+def batch_preprocess(batch: list[T.Tensor], fn: BaseEstimator) -> dict:
     """Preprocess the entire batch of jets.
 
     This runs on pytorch tensors and should slot in as a collate function
@@ -92,4 +100,18 @@ def batch_preprocess(batch: list, fn: BaseEstimator) -> dict:
 
     # Replace with the new constituents
     jet_dict["csts"] = csts
+    return jet_dict
+
+
+def compose(jet_dict, transforms: list) -> tuple:
+    """Composes a series of preprocessing functions into a single function."""
+    # Cycle through all the functions to compose
+    for fn in transforms:
+        # Check if the function is callable
+        if not callable(fn):
+            raise TypeError(f"Expected a callable function, got {fn}")
+
+        # Apply the function to a copy of the dict (mutable)s
+        jet_dict = fn(deepcopy(jet_dict))
+
     return jet_dict

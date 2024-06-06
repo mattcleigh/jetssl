@@ -16,8 +16,6 @@ from src.setup.root_utils import (
     read_shlomi_file,
 )
 
-# The branches needed from the shlomi root files
-
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -72,7 +70,7 @@ def main() -> None:
     # Loop over the root files
     for file in root_files:
         # Read the root file
-        jets, tracks, labels, vertices = read_shlomi_file(file)
+        jets, tracks, labels, vtx_pos, track_type = read_shlomi_file(file)
 
         # The labels are 0, 4, 5, change them to 0, 1, 2
         labels = np.where(labels == 4, 1, labels)
@@ -105,6 +103,18 @@ def main() -> None:
         # Get a mask based on track pt
         mask = csts[..., 0] > 0
 
+        # The shlomi datasets are not internally shuffled, which is an issue when
+        # setting up training sessions on a portion of the data.
+        idx = np.random.default_rng().permutation(len(jets))
+        csts = csts[idx]
+        csts_id = csts_id[idx]
+        jets = jets[idx]
+        labels = labels[idx]
+        vtx_id = vtx_id[idx]
+        vtx_pos = vtx_pos[idx]
+        mask = mask[idx]
+        track_type = track_type[idx]
+
         # Save the data to an HDF file
         dest_file = (
             str(file).replace(args.source_path, args.dest_path).replace(".root", ".h5")
@@ -115,8 +125,9 @@ def main() -> None:
             f.create_dataset("jets", data=jets)
             f.create_dataset("labels", data=labels)
             f.create_dataset("vtx_id", data=vtx_id)
-            f.create_dataset("vtx_pos", data=vertices)
+            f.create_dataset("vtx_pos", data=vtx_pos)
             f.create_dataset("mask", data=mask)
+            f.create_dataset("track_type", data=track_type)
 
 
 if __name__ == "__main__":

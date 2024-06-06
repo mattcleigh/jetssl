@@ -3,6 +3,8 @@ _target_: src.models.dino.JetDINO
 t_ema: 0.992
 embed_dim: 8192
 
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.pkl
+
 encoder_config:
   layer_config:
     layerscale_init: 2.0e-1 # Not too stong else CLS token is degenerate

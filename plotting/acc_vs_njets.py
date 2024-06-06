@@ -36,10 +36,6 @@ def main(cfg: DictConfig):
             n_samples = int(n_samples)
             seed = int(seed)
 
-            # Clip at the shlomi dataset size
-            if "shlomi" in cfg.outfile:
-                n_samples = min(n_samples, 543544)
-
             # Load the exported test set
             file_path = m / "outputs" / "test_set.h5"
             try:

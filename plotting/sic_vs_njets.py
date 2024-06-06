@@ -96,7 +96,7 @@ def main(cfg: DictConfig):
             color=line[0].get_color(),
         )
 
-    ax.set_xlabel("Number of training samples")
+    ax.set_xlabel("Number of Signal Samples")
     ax.set_ylabel("Significance Improvement")
     ax.legend()
     ax.set_xscale("log")

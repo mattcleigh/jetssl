@@ -1,0 +1,35 @@
+defaults:
+  - shlomi_base/mappable@train_set
+  - shlomi_base/mappable@val_set
+  - shlomi_base/mappable@test_set
+
+_target_: src.datamodules.hdf.JetDataModule
+
+train_set:
+  processes: training
+
+val_set:
+  processes: valid
+
+test_set:
+  processes: test
+
+loader_config:
+  batch_size: 500
+  num_workers: 2
+  drop_last: true
+  shuffle: true
+  collate_fn:
+    _target_: src.datamodules.preprocessing.compose
+    _partial_: true
+    transforms:
+    - _target_: src.datamodules.preprocessing.batch_masking
+      _partial_: true
+      fn:
+        _target_: src.datamodules.masking.random_masking
+        _partial_: true
+    - _target_: src.datamodules.preprocessing.batch_preprocess
+      _partial_: true
+      fn:
+        _target_: joblib.load
+        filename: ${paths.root_dir}/resources/preprocessor_all.joblib

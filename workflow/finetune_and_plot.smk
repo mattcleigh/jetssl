@@ -25,17 +25,18 @@ backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0]
+seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
-model_names = ["reg", "vae", "kmeans", "diff", "flow", "untrained"]
+model_names = ["untrained", "reg", "vae", "kmeans", "diff", "flow"]
 
 # Define the finetuning tasks
 downstream_tasks = {
-    "jetclass": ["experiment=train_classifier", "datamodule=jetclass"],
-    # "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
-    # "vtx": ["experiment=train_vertexer"],
-    # "cwola": ["experiment=train_cwola"],
+    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass_stream"],
+    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
+    "vtx": ["experiment=train_vertexer"],
+    "cwola": ["experiment=train_cwola"],
+    "trk": ["experiment=train_tracker"],
 }
 
 ########################################
@@ -55,13 +56,16 @@ for dt in dt_names:
 
     # Standard classification we want the full dataset
     if dt == "jetclass":
-        n_jets = [1e4, 1e5, 1e6, 1e7, 1e8]
+        n_jets = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8]
+    # Shlomi doesnt have alot of samples
+    elif dt == "shlomi":
+        n_jets = [1e3, 1e4, 1e5, 543_544]
     # For the cwola task, we need much less jets!
     if dt == "cwola":
         n_jets = [5e2, 1e3, 5e3, 1e4, 1e5]
-    # For the vertexing task, we use all jets only
-    elif dt == "vtx":
-        n_jets = [1e6]
+    # For the vertexing task or tracking, we use all jets only
+    elif dt in {"vtx", "trk"}:
+        n_jets = [543_544]
     n_jets = [int(j) for j in n_jets]
 
     # Work out whick plotting script to run
@@ -69,6 +73,8 @@ for dt in dt_names:
         plot_script = "plotting/vtx_perf.py"
     elif dt == "cwola":
         plot_script = "plotting/sic_vs_njets.py"
+    elif dt == "trk":
+        plot_script = "plotting/trk_perf.py"
     else:
         plot_script = "plotting/acc_vs_njets.py"
 
@@ -97,12 +103,46 @@ for dt in dt_names:
             "file:hydra_cli"
 
     # Next steps must be done for each model, n_jets, fixed or pt, seed
-    for nj in n_jets:
-        for m in model_names:
-            for s in seeds:
+    for s in seeds:
+        for nj in n_jets:
+            for m in model_names:
 
                 # Combine the model and n_jets into a unique identifier
                 model_id = f"{dt}_{m}_{nj}_{s}"
+
+                # Set all of the rules for finetuning
+                ft_rules = ""
+
+                # Setting the patience parameter
+                if dt != "cwola": # Cwola doesnt do early stopping
+                    if nj < 1e4:
+                        ft_rules += "trainer.check_val_every_n_epoch=10 "
+                        ft_rules += "callbacks.early_stopping.patience=5 "
+                    elif nj <= 1e4:
+                        ft_rules += "callbacks.early_stopping.patience=25 "
+                    elif nj <= 1e6:
+                        ft_rules += "callbacks.early_stopping.patience=10 "
+                    else:
+                        ft_rules += "callbacks.early_stopping.patience=5 "
+
+                # Changine the warmup period to be longer for huge datasets
+                if nj >= 1e7:
+                    ft_rules += "model.scheduler.warmup_steps=40000 " # Default is 5K
+
+                # Setting the learning rate to be higher for jetclass
+                if dt == "jetclass" and (nj == 1e8 or m == "untrained"):
+                    ft_rules += "model.optimizer.lr=0.001 " # Default is 1e-4
+
+                # Deciding on when to unfreeze the backbone
+                if m == "untrained":
+                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
+                    ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
+                elif nj >= 1e7:
+                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=20000 "
+                    ft_rules += "callbacks.backbone_finetune.catchup_steps=20000 "
+                elif nj <= 1e3:
+                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=100 "
+
 
                 # Export each model
                 # Takes in: A finetuned model with a successful training txt file
@@ -137,17 +177,17 @@ for dt in dt_names:
                         f"{proj}{model_id}/train_finished.txt",
                     params:
                         "scripts/train.py",
-                        "experiment=train_jetfinetune",
                         f"network_name={model_id}",
                         f"project_name={project_name}",
                         f"model.backbone_path={backbones}{m}.pkl",
                         f"n_jets={nj}",
                         f"seed={s}",
                         dt_args[dt],
+                        ft_rules,
                     threads: 8
                     resources:
                         slurm_partition="shared-gpu,private-dpnc-gpu",
-                        runtime=3 * 60,  # minutes
+                        runtime=12 * 60,  # minutes
                         slurm_extra="--gres=gpu:ampere:1",
                         mem_mb=20000,
                     wrapper:

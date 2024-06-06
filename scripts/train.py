@@ -47,11 +47,16 @@ def main(cfg: DictConfig) -> None:
     datamodule = hydra.utils.instantiate(cfg.datamodule)
 
     log.info("Instantiating the model")
-    model = hydra.utils.instantiate(
-        cfg.model,
-        data_sample=datamodule.get_data_sample(),
-        n_classes=datamodule.n_classes,
-    )
+    if cfg.ckpt_path and not cfg.full_resume:
+        log.info(f"Loading model weights from checkpoint: {cfg.ckpt_path}")
+        model_class = hydra.utils.get_class(cfg.model._target_)
+        model = model_class.load_from_checkpoint(cfg.ckpt_path, map_location="cpu")
+    else:
+        model = hydra.utils.instantiate(
+            cfg.model,
+            data_sample=datamodule.get_data_sample(),
+            n_classes=datamodule.n_classes,
+        )
 
     if cfg.compile:
         log.info(f"Compiling the model using torch 2.0: {cfg.compile}")
@@ -75,7 +80,11 @@ def main(cfg: DictConfig) -> None:
     save_config(cfg)
 
     log.info("Starting training!")
-    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    trainer.fit(
+        model,
+        datamodule=datamodule,
+        ckpt_path=cfg.ckpt_path if cfg.full_resume else None,
+    )
 
     if trainer.state.status == "finished":
         log.info("Declaring job as finished!")

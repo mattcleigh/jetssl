@@ -13,6 +13,7 @@ features = [
     ("mask", "bool", [32]),
     ("vtx_id", "l"),
     ("labels", "l"),
+    ("track_type", "l"),
 ]
 
 # Create the datasets
@@ -29,6 +30,7 @@ csts = T.from_numpy(sh_data.data_dict["csts"])
 mask = T.from_numpy(sh_data.data_dict["mask"])
 labels = T.from_numpy(sh_data.data_dict["labels"])
 vtx_id = T.from_numpy(sh_data.data_dict["vtx_id"])
+track_type = T.from_numpy(sh_data.data_dict["track_type"])
 
 vtx_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
 vtx_mask = T.triu(vtx_mask, diagonal=1)
@@ -42,3 +44,14 @@ print(pos_weight)
 # Check the sum of all weights
 print(targets.sum() * pos_weight)
 print((targets == 0).sum())
+
+# Calculate the different track types
+track_types = track_type[mask]
+counts = T.unique(track_types, return_counts=True)[1]
+weights = len(track_types) / (4 * counts.float())
+
+# Check the sum of all weights
+weight_per_track = weights[track_types]
+print(weights)
+print(weight_per_track.sum())
+print(len(track_types))

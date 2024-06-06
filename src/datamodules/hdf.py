@@ -197,11 +197,6 @@ class JetCWola(Dataset):
         return sample
 
 
-# Placeholder because some of the older checkpoints dont work without it
-class JetMappablePartial:
-    pass
-
-
 class JetDataModule(LightningDataModule):
     def __init__(
         self,
@@ -210,6 +205,7 @@ class JetDataModule(LightningDataModule):
         val_set: partial,
         test_set: partial,
         loader_config: dict,
+        batch_size: int = 0,  # ignored
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)

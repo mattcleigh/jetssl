@@ -10,11 +10,14 @@ model:
   _target_: src.models.classifier.CWoLaClassifier
   scheduler: # Faster warmup
     warmup_steps: 5000
+  optimizer:
+    lr: 1.0e-4
 
-# Manually stop at 20 epochs
+# Manually stop at 10 epochs
 trainer:
   max_epochs: 10
   check_val_every_n_epoch: 10
+  max_steps: -1 # Dont make this null!
 
 # Key parameters for fine-tuning
 n_jets: 1000 # This is for the num_signal but we will use the same name
@@ -29,5 +32,5 @@ datamodule:
     num_signal: ${n_jets}
 
 # Bookkeeping
-project_name: jetssl_finetune3
+project_name: jetssl_finetune_paper
 network_name: cwola_${n_jets}

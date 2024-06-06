@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 
 import pytorch_lightning as pl
@@ -10,7 +11,7 @@ from torch.nn.functional import (
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import ema_param_sync, set_eval
+from mltools.mltools.torch_utils import ema_param_sync
 from mltools.mltools.transformers import Transformer
 from src.models.utils import JetEncoder
 
@@ -67,15 +68,14 @@ class JEPAPredictor(nn.Module):
         self.input_proj = nn.Linear(inpt_dim, self.dim)
         self.output_proj = nn.Linear(self.dim, inpt_dim)
 
-        # The tokens for the null and target nodes
-        self.null_token = nn.Parameter(T.randn((1, 1, self.dim)) * 1e-3)
+        # The tokens for the targets and positional encoding
         self.target_token = nn.Parameter(T.randn((1, 1, self.dim)) * 1e-3)
+        self.pos_embed = nn.Parameter(T.randn((1, 150, self.dim)) * 1e-3)
 
     def forward(
         self,
         x: T.Tensor,
-        mask: T.BoolTensor,
-        null_mask: T.BoolTensor,
+        s_mask: T.BoolTensor,
         target_mask: T.BoolTensor,
     ) -> T.Tensor:
         """Pass through the predictor.
@@ -85,35 +85,37 @@ class JEPAPredictor(nn.Module):
         x : T.Tensor
             The embedded jet constituents. The output of the student encoder.
             May contain cls tokens and registers.
-        mask : T.BoolTensor
-            The mask for the input. Which nodes are real (T) and which are padding (F).
-        null_mask : T.BoolTensor
-            A mask which tells us which nodes were hidden from the student.
-            Allows us to parameterise the predictor with the masking.
+        s_mask : T.BoolTensor
+            The mask from the student output. Which nodes were seen by the student.
+            May contain space for cls tokens and registers.
         target_mask : T.BoolTensor
-            The mask for the target. Which of the teacher's nodes are we tryuing to
+            The mask for the target. Which of the teacher's nodes are we trying to
             predict.
         """
+        # Get the shapes of the inputs
+        B, S = target_mask.shape
+        R = x.shape[1] - S
+
         # Embed the nodes into the predictor space
         x = self.input_proj(x)
 
-        # The predictor needs to know:
-        # 1) Which nodes were hidden from the student (augmentation)
-        null_tokens = self.null_token.expand(*null_mask.shape, -1)
-        null_tokens = null_tokens * null_mask.unsqueeze(-1)
-        # 2) Which nodes are the target
-        targ_tokens = self.target_token.expand(*target_mask.shape, -1)
-        targ_tokens = targ_tokens * target_mask.unsqueeze(-1)
+        # Add the positional encoding to the x tokens
+        x = x + self.pos_embed[:, : S + R]
 
-        # Add to the sequence part of x (not the registers)
-        S = null_mask.shape[1]
-        x[:, -S:] = x[:, -S:] + null_tokens + targ_tokens
+        # Create the target tokens, which just token + embed in the shape of x
+        targ_tokens = (
+            self.target_token.expand(B, 1, self.dim) + self.pos_embed[:, R : R + S]
+        )
+
+        # Concat the target tokens to the FRONT of x
+        x = T.cat([targ_tokens, x], dim=1)
+        mask = T.cat([target_mask, s_mask], dim=1)
 
         # Pass through the transformer
         x = self.encoder(x, mask=mask)
 
-        # We only need the target nodes
-        x = x[:, -S:][target_mask]
+        # We only need the outputs of the target nodes
+        x = x[:, :S][target_mask]
 
         # Project back to the original space
         return self.output_proj(x)
@@ -133,7 +135,8 @@ class JetJEPA(pl.LightningModule):
         scheduler: dict,
         class_head: partial,
         backbone_path: str | None = None,
-        t_ema: float = 0.992,
+        ema_start: float = 0.996,
+        ema_steps: int = 1000_000,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -141,19 +144,16 @@ class JetJEPA(pl.LightningModule):
         # Attributes
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
-        self.t_ema = t_ema
+        self.ema_start = ema_start
+        self.ema_steps = ema_steps
 
         # The student and teacher models
-        if backbone_path is not None:
-            self.student = T.load(backbone_path)
-            self.teacher = T.load(backbone_path)
-        else:
-            self.student = JetEncoder(
-                csts_dim=self.csts_dim, encoder_config=encoder_config
-            )
-            self.teacher = JetEncoder(
-                csts_dim=self.csts_dim, encoder_config=encoder_config
-            )
+        self.student = (
+            T.load(backbone_path)
+            if backbone_path is not None
+            else JetEncoder(csts_dim=self.csts_dim, encoder_config=encoder_config)
+        )
+        self.teacher = deepcopy(self.student)  # Official code uses a copy
         self.teacher.requires_grad_(False)  # Teacher is an EMA of student
 
         # Save the embedding dimension
@@ -185,17 +185,17 @@ class JetJEPA(pl.LightningModule):
         target_mask[~null_mask] = False
 
         # Pass the inputs through the student model, masking some nodes
+        _B, S, _D = csts.shape
         s_out, s_mask = self.student(csts, csts_id, mask & ~null_mask)
 
         # Pass the inputs through the teacher model, without the null mask
-        with set_eval(self), T.no_grad():
+        with T.no_grad():
             t_out, t_mask = self.teacher(csts, csts_id, mask)
-            S = csts.shape[1]  # Number of nodes
             target = t_out[:, -S:]  # Strip the cls/register tokens
-            target = target[target_mask]  # Only need the target nodes
+            target = target[target_mask]  # Only care about the target nodes
 
-        # Pass the student outputs through the predictor (t_mask includes registers)
-        p_out = self.predictor(s_out, s_mask, null_mask, target_mask)
+        # Pass the student outputs through the predictor
+        p_out = self.predictor(s_out, s_mask, target_mask)
 
         # Calculate the prediction losses for the target mask and log
         # Official JEPA code uses smooth_l1_loss over mse
@@ -204,22 +204,16 @@ class JetJEPA(pl.LightningModule):
         # Calculate the regularisation loss for the predictor
         reg_loss, std_loss, cov_loss = self.reg_loss(s_out, s_mask)
 
-        # Perform the ema updates (while training only)
-        if self.training:
-            ema_param_sync(self.student, self.teacher, self.t_ema)
-
         # Run the probe to evaluate the embedding using the teacher's output
         # In MPM we typically do it every 50 batches.
+        probe_loss = 0
         if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.class_head(t_out.detach(), mask=t_mask.detach())
             probe_loss = cross_entropy(class_out, labels)
-
-            # Log the probe accuracy
             acc = getattr(self, f"{prefix}_acc")
             acc(class_out, labels)
             self.log(f"{prefix}/probe_accuracy", acc)
-        else:
-            probe_loss = T.zeros(1, device=self.device)
+            self.log(f"{prefix}/probe_loss", probe_loss)
 
         # Combine and log the losses
         total_loss = pred_loss + reg_loss + probe_loss
@@ -227,10 +221,13 @@ class JetJEPA(pl.LightningModule):
         self.log(f"{prefix}/pred_loss", pred_loss)
         self.log(f"{prefix}/std_loss", std_loss)
         self.log(f"{prefix}/cov_loss", cov_loss)
-        self.log(f"{prefix}/probe_loss", probe_loss)
         return total_loss
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
+        # Perform the ema for the teacher network
+        ema = self.ema_scheduler(self.trainer.global_step)
+        ema_param_sync(self.student, self.teacher, ema)
+
         return self._shared_step(sample, batch_idx, "train")
 
     def validation_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
@@ -244,3 +241,7 @@ class JetJEPA(pl.LightningModule):
         """Create the pickled object for the backbone out of the teacher components."""
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")
+
+    def ema_scheduler(self, step: int) -> None:
+        """Method to calculate the EMA decay for the teacher network."""
+        return min(1, self.ema_start + step * (1 - self.ema_start) / self.ema_steps)

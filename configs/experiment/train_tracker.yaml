@@ -2,10 +2,10 @@
 
 defaults:
   - override /datamodule: shlomi.yaml
-  - override /model: vertexer.yaml
+  - override /model: tracker.yaml
   - override /callbacks: finetune.yaml
 
-# Faster warmup but slower startup time
+# Faster warmup
 model:
   scheduler:
     warmup_steps: 5000
@@ -20,13 +20,20 @@ trainer:
 # Placeholder as snakemake needs to override this
 n_jets: 1000
 
-# We use the ARI performance on b jets for early stopping
+# Longer patience
 callbacks:
   early_stopping:
     patience: 25
-    monitor: valid/ari_2
-    mode: max
+
+# Labels are Oth, U, C, B
+datamodule:
+  train_set:
+    n_classes: 4
+  val_set:
+    n_classes: 4
+  test_set:
+    n_classes: 4
 
 # Bookkeeping
-project_name: jetssl_finetune
-network_name: vertexer
+project_name: jetssl_finetune_paper
+network_name: tracker

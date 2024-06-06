@@ -15,6 +15,10 @@ from mltools.mltools.transformers import Transformer
 if TYPE_CHECKING:
     from src.models.utils import JetBackbone
 
+import logging
+
+log = logging.getLogger(__name__)
+
 # TODO(Matthew): Make this a parameter... somehow
 # 001
 CSTS_ID = 8
@@ -41,6 +45,7 @@ class Classifier(LightningModule):
         self.n_classes = n_classes
 
         # Load the pretrained and pickled JetBackbone object.
+        log.info(f"Loading backbone from {backbone_path}")
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
 
         # Create the head for the downstream task

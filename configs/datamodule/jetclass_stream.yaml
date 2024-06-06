@@ -18,10 +18,10 @@ test_set:
   _partial_: True
   path: ${paths.data_dir}/JetClassH5/test_20M_combined.h5
   n_classes: 10
-  n_jets: 1000_000 # Dont need 20M
+  n_jets: 5000_000 # Dont need 20M
 
 num_workers: 10
-batch_size: 500 # For smaller GPUs
+batch_size: 1000
 pin_memory: True
 transforms:
   - _target_: src.datamodules.preprocessing.preprocess

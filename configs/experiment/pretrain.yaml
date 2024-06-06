@@ -5,11 +5,11 @@ defaults:
   ######################
   # - /model/tasks/reg
   # - /model/tasks/kmeans
-  - /model/tasks/vae
+  # - /model/tasks/vae
   # - /model/tasks/diff
   # - /model/tasks/flow
-  - /model/tasks/id # Compliments the other tasks
-  - /model/tasks/probe # Keep this on for benchmarking
+  # - /model/tasks/id # Compliments the other tasks
+  # - /model/tasks/probe # Keep this on for benchmarking
   ######################
   - override /datamodule: jetclass_masked
   - override /model: mpm

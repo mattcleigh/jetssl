@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  - /model/tasks/kmeans
+  - /model/tasks/id
+  - /model/tasks/probe
+  - override /datamodule: shlomi_masked
+  - override /model: mpm
+
+# Shorter train
+trainer:
+  max_steps: 100_000
+
+# Faster warmup
+model:
+  scheduler:
+    warmup_steps: 50_000
+
+weight_ckpt_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/kmeans2/checkpoints/last.ckpt
+full_ckpt_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/kmeans2/checkpoints/last.ckpt
+
+# Model modifications
+project_name: jetssl2
+network_name: kmeans_adaption
+full_resume: False

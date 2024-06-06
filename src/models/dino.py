@@ -16,7 +16,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import ema_param_sync, set_eval
+from mltools.mltools.torch_utils import ema_param_sync
 from src.models.utils import MLP, JetEncoder
 
 # TODO(Matthew): Make this a parameter... somehow
@@ -218,7 +218,9 @@ class JetDINO(pl.LightningModule):
 
         # Pass through the teacher model without dropping
         # We want to keep the raw backbone output for the probe
-        with set_eval(self), T.no_grad():
+        with T.no_grad():
+            self.teacher.eval()
+            self.teacher_proj.eval()
             _B, S, _D = csts.shape
             e_t, e_mask = self.teacher(csts, csts_id, mask)
             w_t = self.teacher_proj(e_t)
@@ -233,7 +235,7 @@ class JetDINO(pl.LightningModule):
         if random.random() < 0.5:
             loss_ibot = self.dino_loss(x_s[mask], x_t[mask])
         else:
-            loss_ibot = T.zeros(1, device=self.device)
+            loss_ibot = 0.0
 
         # Perform the ema updates (while training only)
         if self.training:
@@ -251,7 +253,7 @@ class JetDINO(pl.LightningModule):
             acc(class_out, labels)
             self.log(f"{prefix}/probe_accuracy", acc)
         else:
-            probe_loss = T.zeros(1, device=self.device)
+            probe_loss = 0.0
 
         # Combine and log the losses
         total_loss = loss_dino + loss_ibot + probe_loss

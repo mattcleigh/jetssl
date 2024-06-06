@@ -36,7 +36,7 @@ def main(cfg: DictConfig):
 
         # Cycle through the models
         for m in models:
-            # <dataset_name>_<model_name>_<n_samples>_<seed>
+            # <task_name>_<model_name>_<n_samples>_<seed>
             _dset, model, n_samples, seed = m.name.split("_")
             n_samples = int(n_samples)
             seed = int(seed)
@@ -97,8 +97,8 @@ def main(cfg: DictConfig):
 
     # Cycle through the classes and plot the results
     met_labels = {
-        "acc": "Accuracy",
-        "f1": "F1 Score",
+        # "acc": "Accuracy",
+        # "f1": "F1 Score",
         "perf": "Fraction of Perfect Jets",
         "ari": "ARI",
     }

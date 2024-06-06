@@ -102,6 +102,8 @@ def read_shlomi_file(
             "true_vtx_L3D",
         ]
 
+    hadron_features = ["hadron_pdgid", "hadron_z"]
+
     with uproot.open(filepath) as f:
         tree = f["tree"]
         jets = tree.arrays(expressions=jet_features, library="pd")
@@ -109,13 +111,22 @@ def read_shlomi_file(
         tracks = tree.arrays(expressions=track_features, library="ak")
         vertices = tree.arrays(expressions=vertex_features, library="ak")
 
+        # For determining the origin (B, C, U, Oth) of the tracks
+        hadrons = tree.arrays(expressions=hadron_features, library="ak")
+        true_z = tree.arrays(expressions="trk_prod_z", library="ak")
+
     # Convert to padded numpy arrays
-    tracks = ak_to_numpy_padded(tracks, max_len=num_particles)
-    vertices = ak_to_numpy_padded(vertices)
     jets = jets.to_numpy().astype("f")
     labels = labels.to_numpy().astype("l")
+    tracks = ak_to_numpy_padded(tracks, max_len=num_particles)
+    vertices = ak_to_numpy_padded(vertices)
 
-    return jets, tracks, labels, vertices
+    # Determine the origin of the tracks
+    hadrons = ak_to_numpy_padded(hadrons)
+    true_z = ak_to_numpy_padded(true_z).squeeze()
+    track_type = get_track_type(hadrons, true_z)
+
+    return jets, tracks, labels, vertices, track_type
 
 
 def read_jetclass_file(
@@ -274,3 +285,42 @@ def pxpypz_to_ptetaphi(kinematics: np.ndarray) -> np.ndarray:
     phi = np.arctan2(py, px)
 
     return np.concatenate([pt, eta, phi], axis=-1)
+
+
+def is_C_hadron(pdgid: np.ndarray) -> np.ndarray:
+    """Return a mask for all C hadrons."""
+    abs_pdgid = np.abs(pdgid)
+    is_meson = (abs_pdgid > 510) & (abs_pdgid < 546)
+    is_baryon = (abs_pdgid > 5120) & (abs_pdgid < 5555)
+    return is_meson | is_baryon
+
+
+def is_B_hadron(pdgid: np.ndarray) -> np.ndarray:
+    """Return a mask for all C hadrons."""
+    abs_pdgid = np.abs(pdgid)
+    is_meson = (abs_pdgid > 410) & (abs_pdgid < 436)
+    is_baryon = (abs_pdgid > 4120) & (abs_pdgid < 4445)
+    return is_meson | is_baryon
+
+
+def get_track_type(hadrons: np.ndarray, true_z: np.ndarray) -> np.ndarray:
+    # Round the z positions to 3 decimal places
+    true_z = np.round(true_z, 3)
+    hadrons = np.round(hadrons, 3)
+
+    # Get the identity of the hadron itself
+    is_b_hadron = is_B_hadron(hadrons[..., 0])
+    is_c_hadron = is_C_hadron(hadrons[..., 0])
+
+    # Check if the distance between the track and the hadron is small enough
+    is_close = np.abs(true_z[..., None] - hadrons[..., 1][..., None, :]) < 1e-3
+    close_to_B = is_close & is_b_hadron[:, None, :]
+    close_to_C = is_close & is_c_hadron[:, None, :]
+
+    # Work out where the track came from (Other, U, C, B)
+    track_type = np.zeros(true_z.shape, dtype=int)
+    track_type = np.where(true_z == 0, 1, track_type)
+    track_type = np.where(close_to_C.any(-1), 2, track_type)
+    track_type = np.where(close_to_B.any(-1), 3, track_type)
+
+    return track_type  # noqa: RET504
