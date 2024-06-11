@@ -18,16 +18,21 @@ features = [
     ("csts_id", "f", [32]),
     ("mask", "bool", [32]),
     ("labels", "l"),
+    ("jets", "f"),
 ]
 
 jc_data = JetHDFStream(
     path="/srv/fast/share/rodem/JetClassH5/train_100M_combined.h5",
     features=features,
     n_classes=10,
-    n_jets=100_000,
+    n_jets=10_000,
     transforms=[
-        partial(preprocess, fn=joblib.load(root / "resources/preprocessor_all.joblib")),
         partial(batch_masking, fn=random_masking),
+        partial(
+            preprocess,
+            fn=joblib.load(root / "resources/preprocessor_all.joblib"),
+            hlv_fn=joblib.load(root / "resources/preprocessor_jets.joblib"),
+        ),
     ],
 )
 
@@ -40,7 +45,15 @@ loader = DataLoader(
     num_workers=6,
 )
 
-# Plot the first batch
+jets_min = np.zeros(5) + np.inf
+jets_max = np.zeros(5) - np.inf
+for batch in tqdm(loader):
+    jets = batch["jets"]
+    jets_min = np.minimum(jets_min, jets.min(axis=0)[0])
+    jets_max = np.maximum(jets_max, jets.max(axis=0)[0])
+
+
+# PLot the dataset
 csts = [batch["csts"][batch["mask"]] for batch in tqdm(loader)]
 csts = np.concatenate(csts)
 

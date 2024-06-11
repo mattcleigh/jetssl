@@ -25,18 +25,18 @@ backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0] #, 1, 2, 3, 4]
+seeds = [0, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
-model_names = ["untrained", "reg", "vae", "kmeans", "diff", "flow"]
+model_names = ["untrained", "reg", "diff", "flow", "vae", "kmeans"]
 
 # Define the finetuning tasks
 downstream_tasks = [
     # "jetclass",
-    # "shlomi",
+    "shlomi",
     "vtx",
-    # "cwola",
-    # "trk",
+    "cwola",
+    "trk",
 ]
 
 ########################################
@@ -47,7 +47,7 @@ rule all:
         expand(f"{plot_dir}{{dt}}.pdf", dt=downstream_tasks),
 
 
-# For each downstream task make a rule to plot, export and finetune
+# For each downstream task make a rule to finetune -> export -> plot
 for dt in downstream_tasks:
 
     # Standard classification we want the full dataset
@@ -64,7 +64,7 @@ for dt in downstream_tasks:
         n_jets = [543_544]
     n_jets = [int(j) for j in n_jets]
 
-    # Work out whick plotting script to run
+    # Which plotting script to run
     if dt == "vtx":
         plot_script = "plotting/vtx_perf.py"
     elif dt == "cwola":
@@ -195,7 +195,7 @@ for dt in downstream_tasks:
                     threads: 8
                     resources:
                         slurm_partition="shared-gpu,private-dpnc-gpu",
-                        runtime=12 * 60,  # minutes
+                        runtime=3 * 60,  # minutes
                         slurm_extra="--gres=gpu:ampere:1",
                         mem_mb=20000,
                     wrapper:

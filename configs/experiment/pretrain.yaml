@@ -20,5 +20,5 @@ trainer:
 
 # Model modifications
 project_name: jetssl2
-network_name: vae2
+network_name: test
 full_resume: False

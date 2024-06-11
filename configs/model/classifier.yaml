@@ -1,6 +1,6 @@
 _target_: src.models.classifier.Classifier
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/vae.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.pkl
 
 defaults:
   - optimizer: default.yaml

@@ -30,8 +30,8 @@ class MaskedParticleModelling(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         tasks: dict,
-        use_id: bool = True,
         do_mae: bool = True,
+        use_id: bool = True,
         use_hlv: bool = False,  # Ideally true but must be compatible with old models
     ) -> None:
         """Initialise the model.
@@ -52,11 +52,11 @@ class MaskedParticleModelling(pl.LightningModule):
             The scheduler to be used.
         tasks : dict
             A dictionary of tasks to be used. Sould be a list of partials.
-        use_id : bool, optional
-            Whether to include the ID information in the network inputs,
-            by default True.
         do_mae : bool, optional
             Whether to do the masked autoencoder task, otherwise use BERT,
+            by default True.
+        use_id : bool, optional
+            Whether to include the ID information in the network inputs,
             by default True.
         use_hlv : bool, optional
             Whether to use the HLV-Jet information as context, by default False.
@@ -73,11 +73,11 @@ class MaskedParticleModelling(pl.LightningModule):
         self.ctxt_dim = data_sample["jets"].shape[-1] if use_hlv else 0
 
         # Attributes
-        self.use_id = use_id
         self.do_mae = do_mae
+        self.use_id = use_id
         self.use_hlv = use_hlv
         self.n_classes = n_classes
-        self.cemb_dim = 64 if use_hlv else 0
+        self.cemb_dim = 32 if use_hlv else 0  # Hardcoded for now
 
         # The transformer encoder (encoder, no positional encoding)
         self.encoder = Transformer(**encoder_config, ctxt_dim=self.cemb_dim)
@@ -89,8 +89,8 @@ class MaskedParticleModelling(pl.LightningModule):
 
         # The embedding layers
         self.csts_emb = nn.Linear(self.csts_dim, self.encoder.dim)
-        self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim) if use_id else None
         self.jets_emb = nn.Linear(self.ctxt_dim, self.cemb_dim) if use_hlv else None
+        self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim) if use_id else None
 
         # The output dimension (input for the tasks)
         self.outp_dim = self.decoder.dim if self.do_mae else self.encoder.dim

@@ -11,6 +11,14 @@ root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 import matplotlib.pyplot as plt
 
+np.seterr(divide="ignore", invalid="ignore")
+
+
+def softmax(x: np.ndarray, axis: int = -1, temp: float = 1.0):
+    """Compute the softmax of an array of values."""
+    e_x = np.exp(x / temp)
+    return e_x / e_x.sum(axis=axis, keepdims=True)
+
 
 @hydra.main(
     version_base=None,
@@ -50,36 +58,23 @@ def main(cfg: DictConfig):
                 continue
 
             # Turn the prediction into heavy or not (class 1 or 2)
-            pred = np.isin(output.argmax(-1), [1, 2])
+            pred = softmax(output, axis=-1)
+            pred[..., 1] += pred[..., 2]
+            pred = pred.argmax(-1) == 1
             target = np.isin(track_type, [1, 2])
             n_tracks = mask.sum(-1)
+
+            # Calculate the purity and efficiency of the dataset
+            num = (pred & target & mask).sum(-1)  # true positive
+            pure = num / (pred & mask).sum(-1)  # Precision
+            eff = num / (target & mask).sum(-1)  # recall
+            f1 = 2 / (1 / eff + 1 / pure)
 
             # We will plot based on the number of tracks in the jet
             for jet_type in [1, 2]:  # light, charm, bottom
                 for n_trk in range(2, 16):
                     # Mask to select the jets
                     sel_mask = (n_tracks == n_trk) & (labels.squeeze() == jet_type)
-                    k = mask[sel_mask]
-                    p = pred[sel_mask]
-                    t = target[sel_mask]
-
-                    # Purity = TP / (TP + FP)
-                    p_num = (p & t & k).sum(-1)
-                    p_div = (p & k).sum(-1)
-                    pure = p_num / (p_div + 1e-12)
-
-                    # Efficiency = TP / (TP + FN)
-                    e_num = (p & t & k).sum(-1)
-                    e_div = (t & k).sum(-1)
-                    eff = e_num / (e_div + 1e-12)
-
-                    # F1 = 2 * (P * R) / (P + R)
-                    f1 = 2 * (pure * eff) / (pure + eff + 1e-12)
-
-                    # Average only where the values are defined
-                    pure = pure[p_div > 0].mean()
-                    eff = eff[e_div > 0].mean()
-                    f1 = f1[(p_div > 0) & (e_div > 0)].mean()
 
                     # Add the information to the dataframe
                     row = {
@@ -87,9 +82,9 @@ def main(cfg: DictConfig):
                         "seed": seed,
                         "n_trk": n_trk,
                         "label": jet_type,
-                        "eff": eff,
-                        "pure": pure,
-                        "f1": f1,
+                        "eff": np.nanmean(pure[sel_mask]),
+                        "pure": np.nanmean(eff[sel_mask]),
+                        "f1": np.nanmean(f1[sel_mask]),
                     }
                     row = pd.DataFrame.from_dict(row, orient="index").T
                     df = pd.concat([df, row])
@@ -97,7 +92,7 @@ def main(cfg: DictConfig):
     met_labels = {
         "eff": "Efficiency",
         "pure": "Purity",
-        "f1": "F1-Score",
+        "f1": "F1 Score",
     }
     jet_labels = {
         1: "c-jets",
@@ -106,10 +101,9 @@ def main(cfg: DictConfig):
 
     # We make a seperate plot for c and b jets
     for jet_type in [1, 2]:
-        # Seperate plot for purity and efficiency
         for metric in ["eff", "pure", "f1"]:
             # Create the figure
-            fig, ax = plt.subplots(figsize=(4, 4))
+            fig, ax = plt.subplots(figsize=(6, 4))
 
             # Cycle through each of the models to include
             for m in np.unique(df["model"]):
@@ -140,15 +134,13 @@ def main(cfg: DictConfig):
                     color=line[0].get_color(),
                 )
 
+            # Format the plot
             ax.set_xlabel("Track Multiplicity")
             ax.set_ylabel(met_labels[metric])
-            ax.legend()
+            ax.legend(title=jet_labels[jet_type])
             ax.grid(True, which="both", ls="--", alpha=0.5)
             fig.tight_layout()
-
-            # Add text to the top left
-            ax.text(0.05, 0.95, jet_labels[jet_type], transform=ax.transAxes)
-            ax.set_ylim(0, 1.1)
+            # ax.set_ylim(None, 1)
 
             # Make the directory and save the plot
             path = Path(cfg.plot_dir)

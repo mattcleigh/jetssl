@@ -7,6 +7,16 @@ from torch.nn.functional import pad
 from torch.utils.data.dataloader import default_collate
 
 
+def hlv_safety_clip(jets: np.ndarray) -> np.ndarray:
+    """Clip the jets to avoid numerical instability."""
+    jets[..., 0] = np.clip(jets[..., 0], 0, 1000)  # pt
+    jets[..., 1] = np.clip(jets[..., 1], -5, 5)  # eta
+    jets[..., 2] = np.clip(jets[..., 2], -np.pi, np.pi)  # phi
+    jets[..., 3] = np.clip(jets[..., 3], 0, 600)  # mass
+    jets[..., 4] = np.clip(jets[..., 4], 1, 150)  # number of constituents
+    return jets
+
+
 def preprocess(
     jet_dict: dict[np.ndarray], fn: BaseEstimator, hlv_fn: BaseEstimator | None = None
 ) -> dict:
@@ -46,6 +56,7 @@ def preprocess(
     # If there is a hlvs function, apply it
     if hlv_fn is not None:
         jets = jet_dict["jets"]
+        jets = hlv_safety_clip(jets)
         if exp_jets := (jets.ndim == 1):  # Must work on batched and single jets
             jets = jets[None, ...]
         jets = hlv_fn.transform(jets).astype(jets.dtype)
@@ -118,7 +129,10 @@ def batch_preprocess(
 
     # If there is a hlv function, apply it
     if hlv_fn is not None:
-        jet_dict["jets"] = T.from_numpy(hlv_fn.transform(jet_dict["jets"])).float()
+        jets = jet_dict["jets"]
+        jets = hlv_safety_clip(jets.numpy())
+        jets = hlv_fn.transform(jets)
+        jet_dict["jets"] = T.from_numpy(jets).float()
 
     return jet_dict
 

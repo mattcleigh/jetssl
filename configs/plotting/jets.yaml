@@ -13,11 +13,5 @@ plot_dir: plots/
 outfile: test
 
 models: {}
-  # a: trk_diff
-  # b: trk_flow
-  # c: trk_kmeans
-  # d: trk_reg
-  # e: trk_untrained
-  # f: trk_vae
   # g: tracker
 

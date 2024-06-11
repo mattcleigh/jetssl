@@ -22,6 +22,7 @@ features = [
     ("csts_id", "f", [32]),
     ("mask", "bool", [32]),
     ("labels", "l"),
+    ("jets", "f"),
 ]
 
 # Define the preprocessing pipeline
@@ -50,13 +51,21 @@ jc_data = JetMappable(
 jc_labels = list(JC_CLASS_TO_LABEL.keys())
 cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
 cst_labels = [
-    r"$p_\text{T}$",
+    r"$p_\text{T} [GeV]$",
     r"$\Delta\eta$",
     r"$\Delta\phi$",
     r"$d0$",
     r"$\sigma(d0)$",
     r"$z0$",
     r"$\sigma(z0)$",
+]
+jet_features = ["pt", "eta", "phi", "mass", "ncst"]
+jet_labels = [
+    "$p_\text{T} [GeV]$",
+    r"$\eta$",
+    r"$\phi$",
+    "Mass [GeV]",
+    r"$N_\text{cst}$",
 ]
 
 
@@ -82,6 +91,25 @@ for i in range(len(cst_features)):
         col_labels=[cst_labels[i]],
         legend_kwargs={"loc": "upper right"},
         path=root / f"plots/data/{cst_features[i]}.pdf",
+        do_norm=True,
+    )
+
+# Plot the distribution of the jet features
+jc_jets = jc_data.data_dict["jets"]
+sh_jets = sh_data.data_dict["jets"]
+for i in range(len(jet_features)):
+    plot_multi_hists(
+        data_list=[jc_jets[:, i : i + 1], sh_jets[:, i : i + 1]],
+        fig_height=4,
+        data_labels=["JetClass", "SVFD"],
+        bins=25,
+        logy=True,
+        ignore_nans=True,
+        incl_overflow=False,
+        incl_underflow=False,
+        col_labels=[jet_labels[i]],
+        legend_kwargs={"loc": "upper right"},
+        path=root / f"plots/data/jet_{jet_features[i]}.pdf",
         do_norm=True,
     )
 
