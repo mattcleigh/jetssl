@@ -34,3 +34,6 @@ transforms:
     fn:
       _target_: joblib.load
       filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+    hlv_fn:
+      _target_: joblib.load
+      filename: ${paths.root_dir}/resources/preprocessor_jets.joblib

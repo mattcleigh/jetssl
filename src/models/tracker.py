@@ -78,7 +78,7 @@ class Tracker(LightningModule):
             output, track_type, label_smoothing=0.1, weight=self.class_weights
         )
 
-        # Calculate the accuracy
+        # Calculate the accuracy and f1 scores
         acc = getattr(self, f"{prefix}_acc")
         acc(output, track_type)
 

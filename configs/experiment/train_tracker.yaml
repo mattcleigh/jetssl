@@ -25,7 +25,7 @@ callbacks:
   early_stopping:
     patience: 25
 
-# Labels are Oth, U, C, B
+# Labels are U, C, B, Oth
 datamodule:
   train_set:
     n_classes: 4

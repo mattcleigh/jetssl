@@ -16,6 +16,7 @@ seed: 42 # For reproducibility
 project_name: jetssl # Determines output directory path and wandb project
 network_name: test # Used for both saving and wandb
 ckpt_path: null  # Checkpoint path to resume training
+weight_ckpt_path: null # Checkpoint path to load weights (but not optimizers etc)
 
 # Extra tweaks available with the new pytorch version
 precision: medium # Should use medium if on ampere gpus

@@ -31,14 +31,14 @@ def main(cfg: DictConfig) -> None:
     log.info("Setting up full job config")
 
     if cfg.full_resume:
+        log.info("Attempting to resume previous job")
         old_cfg = reload_original_config(ckpt_flag=cfg.ckpt_flag)
         if old_cfg is not None:
             cfg = old_cfg
     print_config(cfg)
 
-    if cfg.seed:
-        log.info(f"Setting seed to: {cfg.seed}")
-        pl.seed_everything(cfg.seed, workers=True)
+    log.info(f"Setting seed to: {cfg.seed}")
+    pl.seed_everything(cfg.seed, workers=True)
 
     log.info(f"Setting matrix precision to: {cfg.precision}")
     T.set_float32_matmul_precision(cfg.precision)
@@ -47,7 +47,7 @@ def main(cfg: DictConfig) -> None:
     datamodule = hydra.utils.instantiate(cfg.datamodule)
 
     log.info("Instantiating the model")
-    if cfg.ckpt_path and not cfg.full_resume:
+    if cfg.weight_ckpt_path:
         log.info(f"Loading model weights from checkpoint: {cfg.ckpt_path}")
         model_class = hydra.utils.get_class(cfg.model._target_)
         model = model_class.load_from_checkpoint(cfg.ckpt_path, map_location="cpu")
@@ -80,11 +80,7 @@ def main(cfg: DictConfig) -> None:
     save_config(cfg)
 
     log.info("Starting training!")
-    trainer.fit(
-        model,
-        datamodule=datamodule,
-        ckpt_path=cfg.ckpt_path if cfg.full_resume else None,
-    )
+    trainer.fit(model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
     if trainer.state.status == "finished":
         log.info("Declaring job as finished!")

@@ -7,7 +7,9 @@ from torch.nn.functional import pad
 from torch.utils.data.dataloader import default_collate
 
 
-def preprocess(jet_dict: dict[np.ndarray], fn: BaseEstimator) -> dict:
+def preprocess(
+    jet_dict: dict[np.ndarray], fn: BaseEstimator, hlv_fn: BaseEstimator | None = None
+) -> dict:
     """Preprocess a jet dict using a sklearn transformer.
 
     Works on both single and batched jets.
@@ -40,6 +42,17 @@ def preprocess(jet_dict: dict[np.ndarray], fn: BaseEstimator) -> dict:
 
     # Replace with the new constituents
     jet_dict["csts"] = csts
+
+    # If there is a hlvs function, apply it
+    if hlv_fn is not None:
+        jets = jet_dict["jets"]
+        if exp_jets := (jets.ndim == 1):  # Must work on batched and single jets
+            jets = jets[None, ...]
+        jets = hlv_fn.transform(jets).astype(jets.dtype)
+        if exp_jets:
+            jets = jets[0]
+        jet_dict["jets"] = jets
+
     return jet_dict
 
 
@@ -68,7 +81,9 @@ def batch_masking(
     return jet_dict
 
 
-def batch_preprocess(batch: list[T.Tensor], fn: BaseEstimator) -> dict:
+def batch_preprocess(
+    batch: list[T.Tensor], fn: BaseEstimator, hlv_fn: BaseEstimator | None = None
+) -> dict:
     """Preprocess the entire batch of jets.
 
     This runs on pytorch tensors and should slot in as a collate function
@@ -100,6 +115,11 @@ def batch_preprocess(batch: list[T.Tensor], fn: BaseEstimator) -> dict:
 
     # Replace with the new constituents
     jet_dict["csts"] = csts
+
+    # If there is a hlv function, apply it
+    if hlv_fn is not None:
+        jet_dict["jets"] = T.from_numpy(hlv_fn.transform(jet_dict["jets"])).float()
+
     return jet_dict
 
 

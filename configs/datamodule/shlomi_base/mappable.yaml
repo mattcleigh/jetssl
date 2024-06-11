@@ -11,3 +11,4 @@ features:
 - [vtx_id, l, null]
 - [vtx_pos, l, null]
 - [track_type, l, null]
+- ["jets", "f", null]

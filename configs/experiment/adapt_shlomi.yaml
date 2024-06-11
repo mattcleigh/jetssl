@@ -17,7 +17,6 @@ model:
     warmup_steps: 50_000
 
 weight_ckpt_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/kmeans2/checkpoints/last.ckpt
-full_ckpt_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/kmeans2/checkpoints/last.ckpt
 
 # Model modifications
 project_name: jetssl2

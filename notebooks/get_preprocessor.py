@@ -17,6 +17,7 @@ features = [
     ("csts", "f", [128]),
     ("csts_id", "f", [128]),
     ("mask", "bool", [128]),
+    ("jets", "f", None),
 ]
 
 jc_data = JetMappable(
@@ -36,11 +37,14 @@ jc_loader = DataLoader(
 # Get the arrays
 csts = []
 csts_id = []
+jets = []
 for data in tqdm(jc_loader):
     csts.append(data["csts"][data["mask"]])
     csts_id.append(data["csts_id"][data["mask"]])
+    jets.append(data["jets"])
 csts = T.vstack(csts)
 csts_id = T.hstack(csts_id)
+jets = T.vstack(jets)
 
 # Replace the neutral impact parameters with NaNs (so they are disregarded in the fit)
 neut_mask = (csts_id == 0) | (csts_id == 2)
@@ -54,6 +58,15 @@ qt = QuantileTransformer(
 )
 qt.fit(csts)
 dump(qt, "quantile.joblib")
+
+# Make a quantile transformer for the jets
+qt_jets = QuantileTransformer(
+    output_distribution="normal",
+    n_quantiles=500,
+    subsample=len(jets) + 1,
+)
+qt_jets.fit(jets)
+dump(qt_jets, "preprocessor_jets.joblib")
 
 # Check how the transformation worked (just plot the charged particles)
 data = np.nan_to_num(csts[~neut_mask])

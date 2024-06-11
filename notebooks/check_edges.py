@@ -55,3 +55,10 @@ weight_per_track = weights[track_types]
 print(weights)
 print(weight_per_track.sum())
 print(len(track_types))
+
+# Check the types of tracks coming from each label
+for lab in [0, 1, 2]:
+    mask_l = labels == lab
+    track_types_l = track_type[mask_l][mask[mask_l]]
+    for t in [0, 1, 2, 3]:
+        print(f"Label {lab}, Track type {t}: {T.sum(track_types_l == t)}")

@@ -18,14 +18,12 @@ trainer:
   max_steps: 100_000
 
 # Placeholder as snakemake needs to override this
-n_jets: 1000
+n_jets: 543_544
 
-# We use the ARI performance on b jets for early stopping
+# Longer patience
 callbacks:
   early_stopping:
     patience: 25
-    monitor: valid/ari_2
-    mode: max
 
 # Bookkeeping
 project_name: jetssl_finetune

@@ -27,11 +27,13 @@ class JetBackbone(nn.Module):
         csts_emb: nn.Module,
         csts_id_emb: nn.Module | None,
         encoder: nn.Module,
+        jets_emb: nn.Module | None = None,
     ) -> None:
         super().__init__()
         self.csts_emb = csts_emb
         self.csts_id_emb = csts_id_emb
         self.encoder = encoder
+        self.jet_emb = jets_emb
 
     @property
     def dim(self) -> int:
@@ -46,12 +48,20 @@ class JetBackbone(nn.Module):
         csts: T.Tensor,
         csts_id: T.Tensor,
         mask: T.Tensor,
+        jets: T.Tensor | None = None,
     ) -> T.Tensor:
         """Pass through the complete backbone."""
         x = self.csts_emb(csts)
         if self.csts_id_emb is not None:
             x = x + self.csts_id_emb(csts_id)
-        x = self.encoder(x, mask=mask)
+
+        # Need the hasattr check as the older pickled models dont have this
+        ctxt = (
+            self.jet_emb(jets)
+            if hasattr(self, "jet_emb") and self.jet_emb is not None
+            else None
+        )
+        x = self.encoder(x, mask=mask, ctxt=ctxt)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
 
@@ -68,11 +78,14 @@ class JetEncoder(JetBackbone):
         csts_dim: int,
         encoder_config: dict,
         use_csts_id: bool = True,
+        use_hlv: bool = False,
     ) -> None:
-        encoder = Transformer(**encoder_config)
+        cemb_dim = 64 if use_hlv else 0
+        encoder = Transformer(**encoder_config, ctxt=cemb_dim)
         csts_emb = nn.Linear(csts_dim, encoder.dim)
         csts_id_emb = nn.Embedding(CSTS_ID, encoder.dim) if use_csts_id else None
-        super().__init__(csts_emb, csts_id_emb, encoder)
+        jets_emb = nn.Linear(self.ctxt_dim, cemb_dim) if use_hlv else None
+        super().__init__(csts_emb, csts_id_emb, encoder, jets_emb)
 
 
 class VectorDiffuser(nn.Module):

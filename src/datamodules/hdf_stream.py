@@ -103,6 +103,7 @@ class JetHDFStream(Dataset):
                 ["mask", "bool", [128]],
                 ["csts_id", "l", [128]],
                 ["labels", "l", None],
+                ["jets", "f", None],
             ]
 
         # Insert the csts dim into the features

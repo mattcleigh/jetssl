@@ -9,3 +9,5 @@ features:
 - [mask, bool, [128]]
 - [csts_id, l, [128]]
 - [labels, l, null]
+- ["jets", "f", null]
+

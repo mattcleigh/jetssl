@@ -22,7 +22,7 @@ def main(cfg: DictConfig):
     model_list = list(cfg.models.values())
 
     # Create a dataframe to hold the results per n_vertices in the jet
-    cols = ["model", "seed", "n_trk", "label", "eff", "pure"]
+    cols = ["model", "seed", "n_trk", "label", "eff", "pure", "f1"]
     df = pd.DataFrame(columns=cols)
 
     # For each model find all variants and seeds
@@ -49,14 +49,14 @@ def main(cfg: DictConfig):
                 print(e)
                 continue
 
-            # Turn the prediction into heavy or not (class 2 or 3)
-            pred = output.argmax(-1) >= 2
-            target = track_type >= 2
+            # Turn the prediction into heavy or not (class 1 or 2)
+            pred = np.isin(output.argmax(-1), [1, 2])
+            target = np.isin(track_type, [1, 2])
             n_tracks = mask.sum(-1)
 
             # We will plot based on the number of tracks in the jet
             for jet_type in [1, 2]:  # light, charm, bottom
-                for n_trk in range(2, 15):
+                for n_trk in range(2, 16):
                     # Mask to select the jets
                     sel_mask = (n_tracks == n_trk) & (labels.squeeze() == jet_type)
                     k = mask[sel_mask]
@@ -64,14 +64,22 @@ def main(cfg: DictConfig):
                     t = target[sel_mask]
 
                     # Purity = TP / (TP + FP)
-                    num = (p & t & k).sum(-1)
-                    div = (p & k).sum(-1)
-                    pure = (num[div > 0] / div[div > 0]).mean()
+                    p_num = (p & t & k).sum(-1)
+                    p_div = (p & k).sum(-1)
+                    pure = p_num / (p_div + 1e-12)
 
                     # Efficiency = TP / (TP + FN)
-                    num = (p & t & k).sum(-1)
-                    div = (t & k).sum(-1)
-                    eff = (num[div > 0] / div[div > 0]).mean()
+                    e_num = (p & t & k).sum(-1)
+                    e_div = (t & k).sum(-1)
+                    eff = e_num / (e_div + 1e-12)
+
+                    # F1 = 2 * (P * R) / (P + R)
+                    f1 = 2 * (pure * eff) / (pure + eff + 1e-12)
+
+                    # Average only where the values are defined
+                    pure = pure[p_div > 0].mean()
+                    eff = eff[e_div > 0].mean()
+                    f1 = f1[(p_div > 0) & (e_div > 0)].mean()
 
                     # Add the information to the dataframe
                     row = {
@@ -81,6 +89,7 @@ def main(cfg: DictConfig):
                         "label": jet_type,
                         "eff": eff,
                         "pure": pure,
+                        "f1": f1,
                     }
                     row = pd.DataFrame.from_dict(row, orient="index").T
                     df = pd.concat([df, row])
@@ -88,6 +97,7 @@ def main(cfg: DictConfig):
     met_labels = {
         "eff": "Efficiency",
         "pure": "Purity",
+        "f1": "F1-Score",
     }
     jet_labels = {
         1: "c-jets",
@@ -97,7 +107,7 @@ def main(cfg: DictConfig):
     # We make a seperate plot for c and b jets
     for jet_type in [1, 2]:
         # Seperate plot for purity and efficiency
-        for metric in ["eff", "pure"]:
+        for metric in ["eff", "pure", "f1"]:
             # Create the figure
             fig, ax = plt.subplots(figsize=(4, 4))
 

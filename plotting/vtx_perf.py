@@ -7,7 +7,6 @@ import pandas as pd
 import rootutils
 import torch as T
 from omegaconf import DictConfig
-from sklearn.metrics import f1_score
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
@@ -26,7 +25,7 @@ def main(cfg: DictConfig):
     model_list = list(cfg.models.values())
 
     # Create a dataframe to hold the results per n_vertices in the jet
-    cols = ["model", "n_samples", "seed", "n_vtx", "acc", "f1", "perf", "ari"]
+    cols = ["model", "n_samples", "seed", "n_vtx", "ari"]  # "acc", "f1", "perf"]
     df = pd.DataFrame(columns=cols)
 
     # For each model find all variants and seeds
@@ -37,21 +36,20 @@ def main(cfg: DictConfig):
         # Cycle through the models
         for m in models:
             # <task_name>_<model_name>_<n_samples>_<seed>
-            _dset, model, n_samples, seed = m.name.split("_")
+            _task_name, model, n_samples, seed = m.name.split("_")
             n_samples = int(n_samples)
             seed = int(seed)
             print(model, n_samples, seed)
 
-            # Clip at the shlomi dataset size
-            n_samples = min(n_samples, 543544)
-
+            # Load the output file
             file_path = m / "outputs" / "test_set.h5"
             try:
                 with h5py.File(file_path, "r") as f:
                     output = T.from_numpy(f["output"][:])
                     mask = T.from_numpy(f["mask"][:])
                     vtx_id = T.from_numpy(f["vtx_id"][:])
-            except FileNotFoundError:
+            except Exception as e:
+                print(e)
                 continue
 
             # We look at the upper triangle of edges
@@ -63,7 +61,7 @@ def main(cfg: DictConfig):
             target = target & vtx_mask
 
             # Get the predictions of the model (logits)
-            preds = (output > 0) & vtx_mask
+            # preds = (output > 0) & vtx_mask
 
             # Get the number of secondary vertices in the jet
             metrics = {}
@@ -72,22 +70,22 @@ def main(cfg: DictConfig):
                 n_vtx_mask = n_vtx == n
 
                 # Apply the mask to pull out the class samples
-                sel_preds = preds[n_vtx_mask]
-                sel_target = target[n_vtx_mask]
-                sel_vtx_mask = vtx_mask[n_vtx_mask]
+                # sel_preds = preds[n_vtx_mask]
+                # sel_target = target[n_vtx_mask]
+                # sel_vtx_mask = vtx_mask[n_vtx_mask]
                 sel_vtx_id = vtx_id[n_vtx_mask]
                 sel_output = output[n_vtx_mask]
                 sel_mask = mask[n_vtx_mask]
 
                 # Get the reductions for acc and f1
-                corr = sel_preds == sel_target
-                red_target = sel_target[sel_vtx_mask]
-                red_preds = sel_preds[sel_vtx_mask]
+                # corr = sel_preds == sel_target
+                # red_target = sel_target[sel_vtx_mask]
+                # red_preds = sel_preds[sel_vtx_mask]
 
                 # Calculate the metrics
-                metrics["acc"] = corr[sel_vtx_mask].float().mean().item()
-                metrics["f1"] = f1_score(red_target, red_preds).item()
-                metrics["perf"] = corr.all((-1, -2)).float().mean().item()
+                # metrics["acc"] = corr[sel_vtx_mask].float().mean().item()
+                # metrics["f1"] = f1_score(red_target, red_preds).item()
+                # metrics["perf"] = corr.all((-1, -2)).float().mean().item()
                 metrics["ari"] = get_ari(sel_mask, sel_vtx_id, sel_output).mean().item()
 
                 # Add the information to the dataframe
@@ -97,8 +95,8 @@ def main(cfg: DictConfig):
 
     # Cycle through the classes and plot the results
     met_labels = {
-        # "acc": "Accuracy",
-        # "f1": "F1 Score",
+        "acc": "Accuracy",
+        "f1": "F1 Score",
         "perf": "Fraction of Perfect Jets",
         "ari": "ARI",
     }

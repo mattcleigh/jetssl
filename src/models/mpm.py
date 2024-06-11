@@ -32,6 +32,7 @@ class MaskedParticleModelling(pl.LightningModule):
         tasks: dict,
         use_id: bool = True,
         do_mae: bool = True,
+        use_hlv: bool = False,  # Ideally true but must be compatible with old models
     ) -> None:
         """Initialise the model.
 
@@ -57,6 +58,8 @@ class MaskedParticleModelling(pl.LightningModule):
         do_mae : bool, optional
             Whether to do the masked autoencoder task, otherwise use BERT,
             by default True.
+        use_hlv : bool, optional
+            Whether to use the HLV-Jet information as context, by default False.
         """
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -67,14 +70,17 @@ class MaskedParticleModelling(pl.LightningModule):
         # Break down the data sample into the dimensions needed for the model
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
+        self.ctxt_dim = data_sample["jets"].shape[-1] if use_hlv else 0
 
         # Attributes
         self.use_id = use_id
         self.do_mae = do_mae
+        self.use_hlv = use_hlv
         self.n_classes = n_classes
+        self.cemb_dim = 64 if use_hlv else 0
 
         # The transformer encoder (encoder, no positional encoding)
-        self.encoder = Transformer(**encoder_config)
+        self.encoder = Transformer(**encoder_config, ctxt_dim=self.cemb_dim)
 
         # The decoder used for the MAE objective (no positional encoding)
         if self.do_mae:  # No decoder for BERT
@@ -84,6 +90,7 @@ class MaskedParticleModelling(pl.LightningModule):
         # The embedding layers
         self.csts_emb = nn.Linear(self.csts_dim, self.encoder.dim)
         self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim) if use_id else None
+        self.jets_emb = nn.Linear(self.ctxt_dim, self.cemb_dim) if use_hlv else None
 
         # The output dimension (input for the tasks)
         self.outp_dim = self.decoder.dim if self.do_mae else self.encoder.dim
@@ -120,14 +127,16 @@ class MaskedParticleModelling(pl.LightningModule):
         csts_id = data["csts_id"]
         mask = data["mask"]
         null_mask = data["null_mask"]
+        jets = data["jets"]
 
         # Embed the inputs
         x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
+        ctxt = self.jets_emb(jets) if self.use_hlv else None
 
         # Pass through the encoder (might gain registers)
-        x = self.encoder(x, mask=mask & ~null_mask)
+        x = self.encoder(x, mask=mask & ~null_mask, ctxt=ctxt)
         mask = self.encoder.get_combined_mask(mask)
 
         # Resize to the decoder and store the number of registers
@@ -156,11 +165,13 @@ class MaskedParticleModelling(pl.LightningModule):
         csts_id = data["csts_id"]
         mask = data["mask"]
         null_mask = data["null_mask"]
+        jets = data["jets"]
 
         # Embed the inputs
         x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
+        ctxt = self.jets_emb(jets) if self.use_hlv else None
 
         # Trim the null tokens to seq_len and expand to match batch size
         nt = self.null_token[: x.size(1)]
@@ -176,7 +187,7 @@ class MaskedParticleModelling(pl.LightningModule):
 
         # Pass through the encoder dont need registers after
         n_reg = self.encoder.num_registers
-        return self.encoder(x, mask=mask)[:, n_reg:]
+        return self.encoder(x, mask=mask, ctxt=ctxt)[:, n_reg:]
 
     def full_encode(self, data: dict) -> T.Tensor:
         """Full forward pass for inference without null tokens."""
@@ -184,11 +195,13 @@ class MaskedParticleModelling(pl.LightningModule):
         csts = data["csts"]
         csts_id = data["csts_id"]
         mask = data["mask"]
+        jets = data["jets"]
 
         x = self.csts_emb(csts)
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
-        x = self.encoder(x, mask=mask)
+        ctxt = self.jets_emb(jets) if self.use_hlv else None
+        x = self.encoder(x, mask=mask, ctxt=ctxt)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask
 
@@ -213,6 +226,7 @@ class MaskedParticleModelling(pl.LightningModule):
             csts_emb=self.csts_emb,
             csts_id_emb=self.csts_id_emb,
             encoder=self.encoder,
+            jets_emb=self.jets_emb,
         )
         backbone.eval()
         T.save(backbone, "backbone.pkl")

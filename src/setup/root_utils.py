@@ -124,7 +124,7 @@ def read_shlomi_file(
     # Determine the origin of the tracks
     hadrons = ak_to_numpy_padded(hadrons)
     true_z = ak_to_numpy_padded(true_z).squeeze()
-    track_type = get_track_type(hadrons, true_z)
+    track_type = get_track_type(tracks, hadrons, true_z, labels)
 
     return jets, tracks, labels, vertices, track_type
 
@@ -290,37 +290,47 @@ def pxpypz_to_ptetaphi(kinematics: np.ndarray) -> np.ndarray:
 def is_C_hadron(pdgid: np.ndarray) -> np.ndarray:
     """Return a mask for all C hadrons."""
     abs_pdgid = np.abs(pdgid)
-    is_meson = (abs_pdgid > 510) & (abs_pdgid < 546)
-    is_baryon = (abs_pdgid > 5120) & (abs_pdgid < 5555)
+    is_meson = (abs_pdgid > 410) & (abs_pdgid < 436)
+    is_baryon = (abs_pdgid > 4120) & (abs_pdgid < 4445)
     return is_meson | is_baryon
 
 
 def is_B_hadron(pdgid: np.ndarray) -> np.ndarray:
     """Return a mask for all C hadrons."""
     abs_pdgid = np.abs(pdgid)
-    is_meson = (abs_pdgid > 410) & (abs_pdgid < 436)
-    is_baryon = (abs_pdgid > 4120) & (abs_pdgid < 4445)
+    is_meson = (abs_pdgid > 510) & (abs_pdgid < 546)
+    is_baryon = (abs_pdgid > 5120) & (abs_pdgid < 5555)
     return is_meson | is_baryon
 
 
-def get_track_type(hadrons: np.ndarray, true_z: np.ndarray) -> np.ndarray:
-    # Round the z positions to 3 decimal places
-    true_z = np.round(true_z, 3)
-    hadrons = np.round(hadrons, 3)
-
-    # Get the identity of the hadron itself
-    is_b_hadron = is_B_hadron(hadrons[..., 0])
-    is_c_hadron = is_C_hadron(hadrons[..., 0])
+def get_track_type(
+    tracks: np.ndarray, hadrons: np.ndarray, true_z: np.ndarray, labels
+) -> np.ndarray:
+    # Use the pt of the tracks to set the mask and unpack the hadron information
+    mask = tracks[..., 0] > 0
+    had_pdg = hadrons[..., 0]
+    had_z = hadrons[..., 1]
+    tol = 1e-6
 
     # Check if the distance between the track and the hadron is small enough
-    is_close = np.abs(true_z[..., None] - hadrons[..., 1][..., None, :]) < 1e-3
-    close_to_B = is_close & is_b_hadron[:, None, :]
-    close_to_C = is_close & is_c_hadron[:, None, :]
+    track_had_dist = np.expand_dims(true_z, -1) - np.expand_dims(had_z, 1)
+    close_to_had = np.abs(track_had_dist) < tol
+    close_to_had[~mask] = False  # Padded tracks aren't close to anything
 
-    # Work out where the track came from (Other, U, C, B)
-    track_type = np.zeros(true_z.shape, dtype=int)
-    track_type = np.where(true_z == 0, 1, track_type)
-    track_type = np.where(close_to_C.any(-1), 2, track_type)
-    track_type = np.where(close_to_B.any(-1), 3, track_type)
+    # Get the identity of the hadron itself
+    c_hadron = is_C_hadron(had_pdg)[:, None, :]
+    b_hadron = is_B_hadron(had_pdg)[:, None, :]
 
-    return track_type  # noqa: RET504
+    # Check if the track is close to a C or B hadron
+    close_to_pv = np.abs(true_z) < tol
+    close_to_C = (close_to_had & c_hadron).any(-1)
+    close_to_B = (close_to_had & b_hadron).any(-1)
+
+    # Determine the track type
+    track_type = np.zeros_like(true_z, dtype=int) + 3
+    track_type[close_to_pv] = 0
+    track_type[close_to_C] = 1
+    track_type[close_to_B] = 2
+    track_type[~mask] = -1
+
+    return track_type

@@ -31,28 +31,24 @@ seeds = [0] #, 1, 2, 3, 4]
 model_names = ["untrained", "reg", "vae", "kmeans", "diff", "flow"]
 
 # Define the finetuning tasks
-downstream_tasks = {
-    # "jetclass": ["experiment=train_classifier", "datamodule=jetclass_stream"],
-    "shlomi": ["experiment=train_classifier", "datamodule=shlomi"],
-    "vtx": ["experiment=train_vertexer"],
-    "cwola": ["experiment=train_cwola"],
-    "trk": ["experiment=train_tracker"],
-}
+downstream_tasks = [
+    # "jetclass",
+    # "shlomi",
+    "vtx",
+    # "cwola",
+    # "trk",
+]
 
 ########################################
-
-# Flatten the parameters with spaces for easier injection
-dt_names = list(downstream_tasks.keys())
-dt_args = {k: " ".join(v) for k, v in downstream_tasks.items()}
 
 # Final rule to form the endpoint of the DAG
 rule all:
     input:
-        expand(f"{plot_dir}{{dt}}.pdf", dt=dt_names),
+        expand(f"{plot_dir}{{dt}}.pdf", dt=downstream_tasks),
 
 
 # For each downstream task make a rule to plot, export and finetune
-for dt in dt_names:
+for dt in downstream_tasks:
 
     # Standard classification we want the full dataset
     if dt == "jetclass":
@@ -113,8 +109,22 @@ for dt in dt_names:
                 # Set all of the rules for finetuning
                 ft_rules = ""
 
-                # Setting the patience parameter
-                if dt != "cwola": # Cwola doesnt do early stopping
+                # Select the appropriate experiment and data module
+                if dt == "jetclass":
+                    ft_rules += "experiment=train_classifier "
+                    ft_rules += "datamodule=jetclass_stream "
+                elif dt == "shlomi":
+                    ft_rules += "experiment=train_classifier "
+                    ft_rules += "datamodule=shlomi "
+                elif dt == "vtx":
+                    ft_rules += "experiment=train_vertexer "
+                elif dt == "cwola":
+                    ft_rules += "experiment=train_cwola "
+                elif dt == "trk":
+                    ft_rules += "experiment=train_tracker "
+
+                # Setting the patience parameter for the classifier tasks
+                if dt in {"jetclass", "shlomi"}:
                     if nj < 1e4:
                         ft_rules += "trainer.check_val_every_n_epoch=10 "
                         ft_rules += "callbacks.early_stopping.patience=5 "
@@ -142,7 +152,6 @@ for dt in dt_names:
                     ft_rules += "callbacks.backbone_finetune.catchup_steps=20000 "
                 elif nj <= 1e3:
                     ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=100 "
-
 
                 # Export each model
                 # Takes in: A finetuned model with a successful training txt file
@@ -182,7 +191,6 @@ for dt in dt_names:
                         f"model.backbone_path={backbones}{m}.pkl",
                         f"n_jets={nj}",
                         f"seed={s}",
-                        dt_args[dt],
                         ft_rules,
                     threads: 8
                     resources:
