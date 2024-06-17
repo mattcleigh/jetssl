@@ -30,8 +30,8 @@ jc_data = JetHDFStream(
         partial(batch_masking, fn=random_masking),
         partial(
             preprocess,
-            fn=joblib.load(root / "resources/preprocessor_all.joblib"),
-            hlv_fn=joblib.load(root / "resources/preprocessor_jets.joblib"),
+            fn=joblib.load(root / "resources/cst_quant.joblib"),
+            hlv_fn=joblib.load(root / "resources/jet_quant.joblib"),
         ),
     ],
 )
@@ -45,24 +45,29 @@ loader = DataLoader(
     num_workers=6,
 )
 
-jets_min = np.zeros(5) + np.inf
-jets_max = np.zeros(5) - np.inf
+csts = []
+jets = []
 for batch in tqdm(loader):
-    jets = batch["jets"]
-    jets_min = np.minimum(jets_min, jets.min(axis=0)[0])
-    jets_max = np.maximum(jets_max, jets.max(axis=0)[0])
+    csts.append(batch["csts"][batch["mask"]])
+    jets.append(batch["jets"])
+csts = np.vstack(csts)
+jets = np.vstack(jets)
 
-
-# PLot the dataset
-csts = [batch["csts"][batch["mask"]] for batch in tqdm(loader)]
-csts = np.concatenate(csts)
 
 plot_multi_hists(
     data_list=[csts],
     bins=51,
-    logy=True,
     data_labels=["JetClass"],
     col_labels=["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"],
-    path=root / "plots/batch2.png",
+    path=root / "cst.png",
+    do_norm=True,
+)
+
+plot_multi_hists(
+    data_list=[jets],
+    bins=51,
+    data_labels=["JetClass"],
+    col_labels=["pt", "eta", "phi", "mass", "ncst"],
+    path=root / "jets.png",
     do_norm=True,
 )

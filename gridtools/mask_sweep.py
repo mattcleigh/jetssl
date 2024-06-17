@@ -1,3 +1,4 @@
+import numpy as np
 import rootutils
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
@@ -7,8 +8,9 @@ from mltools.mltools.utils import standard_job_array
 
 def main() -> None:
     """Main executable script."""
+    frs = list(np.round(np.arange(0.1, 1.0, 0.1), 1))
     standard_job_array(
-        job_name="pretraining2",
+        job_name="mask_sweep",
         work_dir=root / "scripts",
         log_dir=root / "logs",
         image_path="/srv/fast/share/rodem/images/jetssl_latest.sif",
@@ -17,26 +19,12 @@ def main() -> None:
         n_cpus=6,
         gpu_type="ampere",
         vram_per_gpu=20,
-        time_hrs=4 * 24,
-        mem_gb=40,
+        time_hrs=12,
+        mem_gb=20,
         opt_dict={
-            "network_name": [
-                "mae-kmeans3",
-                "gpt-kmeans3",
-                # "reg2",
-                # "diff2",
-                # "flow2",
-            ],
+            "mask_fraction": frs,
+            "network_name": [f"mae-kmeans3-mf{fr}" for fr in frs],
             "+model/tasks": "[kmeans,id,probe]",
-            # "[kmeans,id,probe]",
-            # "[reg,id,probe]",
-            # "[diff,id,probe]",
-            # "[flow,id,probe]",
-            # ],
-            "model.objective": [
-                "mae",
-                "gpt",
-            ],
             "experiment": "pretrain.yaml",
         },
         use_dashes=False,

@@ -87,19 +87,20 @@ class JetVQVAE(pl.LightningModule):
 
         # Pass through the model
         enc_outs, dec_outs, indices, vq_loss = self.forward(csts, mask)
+        self.log(f"{prefix}/vq_loss", vq_loss)
 
         # Calculate the lossses
         loss_csts = huber_loss(dec_outs[mask], csts[mask])
+        self.log(f"{prefix}/loss_csts", loss_csts)
 
         # Run the probe to evaluate the embedding (once every 50 batches)
         if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.class_head(enc_outs.detach(), mask=mask.detach())
             probe_loss = cross_entropy(class_out, labels)
-
-            # Log the probe accuracy
             acc = getattr(self, f"{prefix}_acc")
             acc(class_out, labels)
             self.log(f"{prefix}/probe_accuracy", acc)
+            self.log(f"{prefix}/probe_loss", probe_loss)
         else:
             probe_loss = T.zeros(1, device=self.device)
 
@@ -110,9 +111,6 @@ class JetVQVAE(pl.LightningModule):
         # Combine and log the losses
         total_loss = loss_csts + probe_loss + vq_loss * 10
         self.log(f"{prefix}/total_loss", total_loss)
-        self.log(f"{prefix}/loss_csts", loss_csts)
-        self.log(f"{prefix}/probe_loss", probe_loss)
-        self.log(f"{prefix}/vq_loss", vq_loss)
 
         return total_loss
 

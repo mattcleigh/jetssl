@@ -52,6 +52,7 @@ weights = len(track_types) / (4 * counts.float())
 
 # Check the sum of all weights
 weight_per_track = weights[track_types]
+print(counts)
 print(weights)
 print(weight_per_track.sum())
 print(len(track_types))

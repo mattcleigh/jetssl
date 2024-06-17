@@ -29,11 +29,12 @@ transforms:
     fn:
       _target_: src.datamodules.masking.random_masking
       _partial_: true
+      mask_fraction: 0.3
   - _target_: src.datamodules.preprocessing.preprocess
     _partial_: true
     fn:
       _target_: joblib.load
-      filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+      filename: ${paths.root_dir}/resources/cst_quant.joblib
     hlv_fn:
       _target_: joblib.load
-      filename: ${paths.root_dir}/resources/preprocessor_jets.joblib
+      filename: ${paths.root_dir}/resources/jet_quant.joblib

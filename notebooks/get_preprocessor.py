@@ -3,7 +3,6 @@ from tqdm import tqdm
 
 root = rootutils.setup_root(search_from=".", pythonpath=True)
 
-import numpy as np
 import torch as T
 from joblib import dump
 from sklearn.preprocessing import QuantileTransformer
@@ -57,7 +56,7 @@ qt = QuantileTransformer(
     subsample=len(csts) + 1,
 )
 qt.fit(csts)
-dump(qt, "quantile.joblib")
+dump(qt, "cst_quant.joblib")
 
 # Make a quantile transformer for the jets
 qt_jets = QuantileTransformer(
@@ -66,25 +65,24 @@ qt_jets = QuantileTransformer(
     subsample=len(jets) + 1,
 )
 qt_jets.fit(jets)
-dump(qt_jets, "preprocessor_jets.joblib")
+dump(qt_jets, "jet_quant.joblib")
 
 # Check how the transformation worked (just plot the charged particles)
-data = np.nan_to_num(csts[~neut_mask])
-transformed = qt.transform(data)
+transformed_cst = qt.transform(csts[~neut_mask])
+transformed_jet = qt_jets.transform(jets)
 from mltools.mltools.plotting import plot_multi_hists
 
 plot_multi_hists(
-    csts,
-    data_labels=["data"],
-    col_labels=["pt", "eta", "phi", "d0", "dz", "d0_err", "dz_err"],
-    bins=100,
-    path="data.png",
-)
-
-plot_multi_hists(
-    transformed,
+    transformed_cst,
     data_labels=["transformed"],
     col_labels=["pt", "eta", "phi", "d0", "dz", "d0_err", "dz_err"],
     bins=100,
-    path="transformed.png",
+    path="transformed_cst.png",
+)
+plot_multi_hists(
+    transformed_jet,
+    data_labels=["transformed"],
+    col_labels=["pt", "eta", "phi", "m", "n"],
+    bins=100,
+    path="transformed_jet.png",
 )

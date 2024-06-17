@@ -60,9 +60,9 @@ def main(cfg: DictConfig):
             # Turn the prediction into heavy or not (class 1 or 2)
             pred = softmax(output, axis=-1)
             pred[..., 1] += pred[..., 2]
-            pred = pred.argmax(-1) == 1
+            pred = pred.argmax(-1)
+            pred = np.isin(pred, [1, 2])
             target = np.isin(track_type, [1, 2])
-            n_tracks = mask.sum(-1)
 
             # Calculate the purity and efficiency of the dataset
             num = (pred & target & mask).sum(-1)  # true positive
@@ -71,6 +71,7 @@ def main(cfg: DictConfig):
             f1 = 2 / (1 / eff + 1 / pure)
 
             # We will plot based on the number of tracks in the jet
+            n_tracks = mask.sum(-1)
             for jet_type in [1, 2]:  # light, charm, bottom
                 for n_trk in range(2, 16):
                     # Mask to select the jets

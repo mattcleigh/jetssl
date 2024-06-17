@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Literal
 
 import pytorch_lightning as pl
 import torch as T
@@ -30,7 +31,7 @@ class MaskedParticleModelling(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         tasks: dict,
-        do_mae: bool = True,
+        objective: Literal["mae", "bert"] = "mae",
         use_id: bool = True,
         use_hlv: bool = False,  # Ideally true but must be compatible with old models
     ) -> None:
@@ -52,9 +53,9 @@ class MaskedParticleModelling(pl.LightningModule):
             The scheduler to be used.
         tasks : dict
             A dictionary of tasks to be used. Sould be a list of partials.
-        do_mae : bool, optional
-            Whether to do the masked autoencoder task, otherwise use BERT,
-            by default True.
+        objective : str, optional
+            The type of objective to be used, by default "mae".
+            Can be "mae" or "bert"
         use_id : bool, optional
             Whether to include the ID information in the network inputs,
             by default True.
@@ -73,17 +74,17 @@ class MaskedParticleModelling(pl.LightningModule):
         self.ctxt_dim = data_sample["jets"].shape[-1] if use_hlv else 0
 
         # Attributes
-        self.do_mae = do_mae
+        self.objective = objective
         self.use_id = use_id
         self.use_hlv = use_hlv
         self.n_classes = n_classes
         self.cemb_dim = 32 if use_hlv else 0  # Hardcoded for now
 
-        # The transformer encoder (encoder, no positional encoding)
+        # The transformer encoder
         self.encoder = Transformer(**encoder_config, ctxt_dim=self.cemb_dim)
 
         # The decoder used for the MAE objective (no positional encoding)
-        if self.do_mae:  # No decoder for BERT
+        if self.objective == "mae":
             self.decoder = Transformer(**decoder_config)
             self.enc_to_dec = nn.Linear(self.encoder.dim, self.decoder.dim)
 
@@ -93,7 +94,7 @@ class MaskedParticleModelling(pl.LightningModule):
         self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim) if use_id else None
 
         # The output dimension (input for the tasks)
-        self.outp_dim = self.decoder.dim if self.do_mae else self.encoder.dim
+        self.outp_dim = self.decoder.dim if objective == "mae" else self.encoder.dim
 
         # The learnable parameters for the dropped nodes in the decoder (1 per seq)
         self.null_token = nn.Parameter(T.randn((self.num_csts, self.outp_dim)) * 1e-3)
@@ -105,7 +106,7 @@ class MaskedParticleModelling(pl.LightningModule):
     def _shared_step(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
         # Pass through the model using the appropriate method
-        data["outputs"] = self.mae_pass(data) if self.do_mae else self.bert_pass(data)
+        data["outputs"] = self.apply_pass(data)
 
         # Calculate the losses per task and log
         loss = T.tensor(0.0, device=self.device)
@@ -119,6 +120,14 @@ class MaskedParticleModelling(pl.LightningModule):
                 task.visualise(self, data)
 
         return loss
+
+    def apply_pass(self, data: dict) -> T.Tensor:
+        """Apply the correct pass through the model."""
+        if self.objective == "mae":
+            return self.mae_pass(data)
+        if self.objective == "bert":
+            return self.bert_pass(data)
+        raise ValueError(f"Objective {self.objective} not recognised.")
 
     def mae_pass(self, data: dict) -> T.Tensor:
         """Pass through the masked autoencoder using and get the decoder outputs."""
@@ -201,6 +210,7 @@ class MaskedParticleModelling(pl.LightningModule):
         if self.use_id:
             x = x + self.csts_id_emb(csts_id)
         ctxt = self.jets_emb(jets) if self.use_hlv else None
+
         x = self.encoder(x, mask=mask, ctxt=ctxt)
         new_mask = self.encoder.get_combined_mask(mask)
         return x, new_mask

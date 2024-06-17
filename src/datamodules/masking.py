@@ -4,7 +4,7 @@ import numpy as np
 def random_pt_masking(
     csts: np.ndarray,
     mask: np.ndarray,
-    mask_fraction: float = 0.5,
+    mask_fraction: float = 0.3,
     seed: int | None = None,
 ) -> np.ndarray:
     """Randomly drop a fraction of the jet based on the total pt."""

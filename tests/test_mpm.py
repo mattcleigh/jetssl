@@ -146,9 +146,9 @@ tasks.append({k: v for t in tasks for k, v in t.items()})
 
 
 @pytest.mark.parametrize("tasks", tasks)
-@pytest.mark.parametrize("do_mae", [True, False])
+@pytest.mark.parametrize("objective", ["bert", "mae", "gpt"])
 @pytest.mark.parametrize("use_id", [True, False])
-def test_base(tmpdir, tasks, do_mae, use_id) -> None:
+def test_base(tmpdir, tasks, objective, use_id) -> None:
     os.chdir(tmpdir)
     jet_dict = dummy_input()
     model = MaskedParticleModelling(
@@ -159,8 +159,8 @@ def test_base(tmpdir, tasks, do_mae, use_id) -> None:
         optimizer=OPT,
         scheduler=SCHED,
         tasks=tasks,
-        use_id=do_mae,
-        do_mae=use_id,
+        use_id=use_id,
+        objective=objective,
     )
     trainer = Trainer(fast_dev_run=True, accelerator="cpu")
     loader = DataLoader(DictDataset(jet_dict), batch_size=3)

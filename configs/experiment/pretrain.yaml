@@ -14,9 +14,19 @@ defaults:
   - override /datamodule: jetclass_masked
   - override /model: mpm
 
+# For long training
+# trainer:
+#   max_steps: 1000_000
+#   val_check_interval: 50_000
+
+# For short training
+mask_fraction: 0.3
 trainer:
-  max_steps: 1000_000
-  val_check_interval: 50_000
+  max_steps: 200_000
+  val_check_interval: 5000
+model:
+  scheduler:
+    warmup_steps: 10_000
 
 # Model modifications
 project_name: jetssl2

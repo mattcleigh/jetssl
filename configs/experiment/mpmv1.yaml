@@ -20,7 +20,7 @@ trainer:
 
 # Base = BERT model with no registers or ID
 model:
-  do_mae: False
+  objective: bert
   use_id: False
   encoder_config:
     num_registers: 0

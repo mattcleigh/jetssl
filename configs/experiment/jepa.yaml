@@ -12,14 +12,14 @@ datamodule:
       fn:
         _target_: src.datamodules.masking.random_masking
         _partial_: true
-        mask_fraction: 0.5
+        mask_fraction: 0.3
       key: null_mask
     - _target_: src.datamodules.preprocessing.batch_masking
       _partial_: true
       fn:
         _target_: src.datamodules.masking.random_masking
         _partial_: true
-        mask_fraction: 0.5
+        mask_fraction: 0.3
       key: target_mask
     - _target_: src.datamodules.preprocessing.preprocess
       _partial_: true
