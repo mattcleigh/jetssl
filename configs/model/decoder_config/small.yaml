@@ -8,3 +8,9 @@ do_final_norm: True # Seems to stabalise esp with hlv
 layer_config:
   num_heads: 4
   ff_mult: 2
+
+# Decoder performances
+# 1 -> 0.826
+# 2 -> 0.831
+# 3 -> 0.827
+# 4 -> 0.828

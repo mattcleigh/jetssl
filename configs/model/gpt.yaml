@@ -1,6 +1,6 @@
 _target_: src.models.gpt.JetGPT
 
-vae_path: /home/users/l/leighm/jetssl/resources/vqvae.pkl
+vae_path: null #/home/users/l/leighm/jetssl/resources/vqvae.pkl
 
 defaults:
   - encoder_config: small.yaml

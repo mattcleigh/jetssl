@@ -1,4 +1,5 @@
 csv:
+  _target_: pytorch_lightning.loggers.CSVLogger
   save_dir: ${paths.full_path}
   name: lightning_logs
   version: null

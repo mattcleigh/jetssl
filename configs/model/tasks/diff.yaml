@@ -18,5 +18,5 @@ diff:
       hddn_dim: 128
       act_h: SiLU
       norm: LayerNorm
-      do_res: True
-      init_zeros: True
+      # do_res: True
+      # init_zeros: True

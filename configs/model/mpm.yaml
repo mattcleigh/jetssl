@@ -2,7 +2,7 @@ _target_: src.models.mpm.MaskedParticleModelling
 
 use_id: True
 objective: mae
-use_hlv: False
+use_hlv: True
 tasks: {}
 
 defaults:
