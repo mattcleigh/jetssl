@@ -4,7 +4,7 @@ do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for mpm
 num_registers: 0 # Decoder MUST not have registers. Those are added by encoder
-do_final_norm: True # Seems to stabalise esp with hlv
+do_final_norm: False # Doesn't seem to help
 layer_config:
   num_heads: 4
   ff_mult: 2

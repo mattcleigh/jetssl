@@ -9,4 +9,4 @@ vae:
   id_conditional: False
   id_embed_dim: 64
 
-  vae_path: /home/users/l/leighm/jetssl/resources/vqvae.pkl
+  vae_path: ${paths.root_dir}/resources/vqvae.pkl

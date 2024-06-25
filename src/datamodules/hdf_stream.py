@@ -186,7 +186,7 @@ class StreamModule(LightningDataModule):
             sampler=BatchSampler(
                 dataset,
                 batch_size=self.batch_size,
-                shuffle=False,  # flag == "train", Honestly its so big...
+                shuffle=flag == "train",  # Honestly its so big we might not have to
                 drop_last=flag == "train",
             ),
             num_workers=self.num_workers,

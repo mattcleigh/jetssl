@@ -33,7 +33,7 @@ class MaskedParticleModelling(pl.LightningModule):
         tasks: dict,
         objective: Literal["mae", "bert"] = "mae",
         use_id: bool = True,
-        use_hlv: bool = False,  # Ideally true but must be compatible with old models
+        use_hlv: bool = False,
     ) -> None:
         """Initialise the model.
 
@@ -79,6 +79,10 @@ class MaskedParticleModelling(pl.LightningModule):
         self.use_hlv = use_hlv
         self.n_classes = n_classes
         self.cemb_dim = 32 if use_hlv else 0  # Hardcoded for now
+
+        # Hack but it turns out that the flow training is more unstable than the others
+        if "flow" in tasks:
+            encoder_config["do_final_norm"] = True
 
         # The transformer encoder
         self.encoder = Transformer(**encoder_config, ctxt_dim=self.cemb_dim)
@@ -198,7 +202,7 @@ class MaskedParticleModelling(pl.LightningModule):
         n_reg = self.encoder.num_registers
         return self.encoder(x, mask=mask, ctxt=ctxt)[:, n_reg:]
 
-    def full_encode(self, data: dict) -> T.Tensor:
+    def forward(self, data: dict) -> T.Tensor:
         """Full forward pass for inference without null tokens."""
         # Unpack the inputs
         csts = data["csts"]

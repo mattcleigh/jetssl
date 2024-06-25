@@ -4,7 +4,7 @@ num_layers: 1
 dim: 128
 layer_config:
   num_heads: 4
-  ff_mult: 2
+  ff_mult: 1
   dropout: 0.2
   layerscale_init: null # Its just a single layer no need for layer scale
 do_input_linear: True

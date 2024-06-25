@@ -5,7 +5,6 @@ import torch as T
 from torch import nn
 from torch.nn import functional as F
 from torchmetrics import Accuracy
-from torchpq.clustering import KMeans
 
 from mltools.mltools.lightning_utils import simple_optim_sched
 from mltools.mltools.transformers import Transformer
@@ -28,7 +27,8 @@ class JetGPT(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
-        vae_path: str,
+        vae_path: str | None = None,
+        kmeans_path: str | None = None,
     ) -> None:
         """Initialise the model.
 
@@ -48,6 +48,8 @@ class JetGPT(pl.LightningModule):
             A dictionary of tasks to be used. Sould be a list of partials.
         vae_path : str
             The path to the VAE model to get the target tokens.
+        kmeans_path : str
+            The path to the kmeans model to get the target tokens.
         class_head : partial
             The class head to be used for the probe.
         """
@@ -57,21 +59,20 @@ class JetGPT(pl.LightningModule):
         # Break down the data sample into the dimensions needed for the model
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
-        self.ctxt_dim = data_sample["jets"].shape[-1]
         self.n_classes = n_classes
-        self.cemb_dim = 32  # Hardcoded for now
-        self.do_kmeans = vae_path is None
+        self.do_kmeans = kmeans_path is not None
+        self.do_vae = vae_path is not None
+        assert self.do_kmeans != self.do_vae, "Need one of VAE or KMeans"
 
         # The transformer encoder
         encoder_config["num_registers"] = 0  # GPT does not use registers
         encoder_config["max_seq_len"] = self.num_csts + 1  # One for the start token
         encoder_config["do_absolute_enc"] = True  # Needs positional encodings!
-        self.encoder = Transformer(**encoder_config, ctxt_dim=self.cemb_dim)
+        self.encoder = Transformer(**encoder_config)
         self.outp_dim = self.encoder.outp_dim
 
         # The embedding layers
         self.csts_emb = nn.Linear(self.csts_dim, self.encoder.dim)
-        self.jets_emb = nn.Linear(self.ctxt_dim, self.cemb_dim)
         self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim)
 
         # Add the learnable start token
@@ -79,9 +80,8 @@ class JetGPT(pl.LightningModule):
 
         # Load the VAE model and freeze it
         if self.do_kmeans:
-            self.kmeans = KMeans(8192, max_iter=500, verbose=10)
-            self.kmeans.centroids = T.zeros((self.csts_dim, self.kmeans.n_clusters))
-            self.end_clus_id = self.kmeans.n_clusters
+            self.kmeans = T.load(kmeans_path, map_location="cpu")
+            self.end_clus_id = self.kmeans.centroids.shape[1]
         else:
             self.vae = T.load(vae_path, map_location="cpu")
             self.vae.requires_grad_(False)
@@ -98,65 +98,105 @@ class JetGPT(pl.LightningModule):
         self.train_acc = Accuracy("multiclass", num_classes=n_classes)
         self.valid_acc = Accuracy("multiclass", num_classes=n_classes)
 
+    def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.Tensor) -> T.Tensor:
+        # Initial embedding
+        x = self.csts_emb(csts) + self.csts_id_emb(csts_id)
+
+        # Add the start token to the input and the mask
+        st = self.start_token.expand(x.size(0), 1, -1)
+        x = T.cat([st, x], dim=1)
+        mask = F.pad(mask, (1, 0), value=True)
+
+        # Pass with causal mask
+        enc_out = self.encoder(x, mask=mask, causal=True)
+        return enc_out, mask
+
     def _shared_step(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
         """Shared step used in both training and validaiton."""
         csts = data["csts"]
         csts_id = data["csts_id"]
         mask = data["mask"]
-        jets = data["jets"]
         labels = data["labels"]
 
-        # Used for adding the end tokens to the labels
-        n_csts = mask.sum(dim=1)[:, None]
-        wstart = F.pad(mask, (1, 0), value=True)
+        # Get the encoded output
+        enc_out, mwstart = self.forward(csts, csts_id, mask)
 
-        # Embed
-        x = self.csts_emb(csts) + self.csts_id_emb(csts_id)
-        ctxt = self.jets_emb(jets)
-
-        # Add positional encodings and append the start token
-        st = self.start_token.expand(x.size(0), 1, -1)
-        x = T.cat([st, x], dim=1)
-
-        # Pass through the encoder with a causal mask
-        enc_out = self.encoder(x, mask=wstart, ctxt=ctxt, causal=True)
-
-        # Get the ID loss
-        csts_id = F.pad(csts_id, (0, 1)).scatter_(1, n_csts, self.end_id)
-        id_out = self.id_head(enc_out)
-        id_loss = F.cross_entropy(id_out[wstart], csts_id[wstart], label_smoothing=0.1)
-        self.log(f"{prefix}/id_loss", id_loss)
-
-        # Pass through the vae or kmeans to get the targets
-        if self.do_kmeans:
-            target = self.kmeans.predict(csts[mask].T.contiguous()).long()
-        else:
-            target = self.vae(csts, mask=mask)[0].long()
-
-        # Get the loss for the VAE/KMeans
-        clus_id = T.zeros((csts.shape[:2]), dtype=T.long, device=x.device)
-        clus_id[mask] = target
-        clus_id = F.pad(clus_id, (0, 1)).scatter_(1, n_csts, self.end_clus_id)
-        clus_out = self.head(enc_out)
-        clus_loss = F.cross_entropy(
-            clus_out[wstart], clus_id[wstart], label_smoothing=0.1
-        )
-        self.log(f"{prefix}/clus_loss", clus_loss)
-
-        # Run the probe to evaluate the embedding
-        probe_loss = T.tensor(0, device=csts.device, dtype=clus_loss.dtype)
-        if batch_idx % 50 == 0 or prefix == "valid":
-            class_out = self.class_head(enc_out, mask=wstart)
-            probe_loss = F.cross_entropy(class_out, labels)
-            acc = getattr(self, f"{prefix}_acc")
-            acc(class_out, labels)
-            self.log(f"{prefix}/probe_loss", probe_loss)
-            self.log(f"{prefix}/probe_accuracy", acc)
+        # Get and log the losses
+        id_loss = self.get_id_loss(prefix, csts_id, enc_out, mwstart)
+        clus_loss = self.get_clus_loss(prefix, csts, enc_out, mwstart)
+        probe_loss = self.get_probe_loss(prefix, enc_out, labels, mwstart, batch_idx)
 
         # Combine and return the losses
         total_loss = id_loss + clus_loss + probe_loss
         self.log(f"{prefix}/total_loss", total_loss)
         return total_loss
+
+    def get_clus_loss(
+        self,
+        prefix: str,
+        csts: T.Tensor,
+        enc_out: T.Tensor,
+        mask_wstart: T.BoolTensor,
+    ) -> T.Tensor:
+        """Get the clustering loss using either the VAE or the KMeans."""
+        mask = mask_wstart[:, 1:]  # Get the old mask for the targets
+
+        # Get the target clusters from the VAE or the KMeans
+        target = (
+            self.kmeans.predict(csts[mask].T.contiguous()).long()
+            if self.do_kmeans
+            else self.vae(csts, mask=mask)[0].long()
+        )
+        clus_id = T.zeros_like(mask, dtype=T.long)  # Redo padding
+        clus_id[mask] = target
+
+        # Insert target for end token
+        n_csts = mask.sum(dim=1)[:, None]
+        clus_id = F.pad(clus_id, (0, 1)).scatter_(1, n_csts, self.end_clus_id)
+
+        # Get the prediction and return the loss
+        clus_out = self.head(enc_out)
+        loss = F.cross_entropy(clus_out[mask_wstart], clus_id[mask_wstart])
+        self.log(f"{prefix}/id_loss", loss)
+        return loss
+
+    def get_id_loss(
+        self,
+        prefix: str,
+        csts_id: T.Tensor,
+        enc_out: T.Tensor,
+        mask_wstart: T.BoolTensor,
+    ) -> T.Tensor:
+        """Get the loss for the constituent ID."""
+        n_csts = mask_wstart.sum(dim=1)[:, None] - 1  # Insert target for end token
+        csts_id = F.pad(csts_id, (0, 1)).scatter_(1, n_csts, self.end_id)
+
+        # Get the prediction and return the loss
+        id_out = self.id_head(enc_out)
+        loss = F.cross_entropy(id_out[mask_wstart], csts_id[mask_wstart])
+        self.log(f"{prefix}/clus_loss", loss)
+        return loss
+
+    def get_probe_loss(
+        self,
+        prefix: str,
+        enc_out: T.Tensor,
+        labels: T.Tensor,
+        mask_wstart: T.BoolTensor,
+        batch_idx: int,
+    ) -> T.Tensor:
+        """Calculate the detached probe loss and accuracy."""
+        if prefix == "train" and batch_idx % 50 != 0:  # Skip most training steps
+            return T.tensor(0, device=enc_out.device, dtype=enc_out.dtype)
+
+        # Make sure to detach the encoder output!
+        class_out = self.class_head(enc_out.detach(), mask=mask_wstart)
+        loss = F.cross_entropy(class_out, labels)
+        acc = getattr(self, f"{prefix}_acc")
+        acc(class_out, labels)
+        self.log(f"{prefix}/probe_loss", loss)
+        self.log(f"{prefix}/probe_accuracy", acc)
+        return loss
 
     def training_step(self, data: dict, batch_idx: int) -> T.Tensor:
         return self._shared_step(data, batch_idx, "train")
@@ -174,35 +214,6 @@ class JetGPT(pl.LightningModule):
             csts_emb=self.csts_emb,
             csts_id_emb=self.csts_id_emb,
             encoder=self.encoder,
-            jets_emb=self.jets_emb,
         )
         backbone.eval()
         T.save(backbone, "backbone.pkl")
-
-    def on_fit_start(self) -> None:
-        """At the start of the fit, fit the kmeans."""
-        if not self.do_kmeans:
-            return
-
-        # Skip kmeans has already been initialised (e.g. from a checkpoint)
-        if self.kmeans.centroids is not None and (self.kmeans.centroids != 0).any():
-            return
-
-        # Load the first 50 batches of training data
-        csts = []
-        mask = []
-        loader = self.trainer.train_dataloader
-        if loader is None:
-            self.trainer.fit_loop.setup_data()
-            loader = self.trainer.train_dataloader
-        for i, data in enumerate(loader):
-            csts.append(data["csts"])
-            mask.append(data["mask"])
-            if i > 50:
-                break
-        csts = T.vstack(csts).to(self.device)
-        mask = T.vstack(mask).to(self.device)
-
-        # Fit the kmeans
-        inputs = csts[mask].T.contiguous()
-        self.kmeans.fit(inputs)

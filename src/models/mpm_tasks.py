@@ -6,7 +6,6 @@ import torch as T
 from torch import nn
 from torch.nn.functional import cross_entropy
 from torchmetrics import Accuracy
-from torchpq.clustering import KMeans
 
 from mltools.mltools.flows import rqs_flow
 from src.models.utils import VectorDiffuser
@@ -179,13 +178,10 @@ class FlowTask(TaskBase):
 class KmeansTask(TaskBase):
     """Task for modelling the properties of the constituent using kmeans clustering."""
 
-    def __init__(self, parent: nn.Module, kmeans_config: dict, **kwargs) -> None:
+    def __init__(self, parent: nn.Module, kmeans_path: str, **kwargs) -> None:
         super().__init__(input_dim=parent.outp_dim, **kwargs)
-        self.kmeans = KMeans(**kmeans_config)
+        self.kmeans = T.load(kmeans_path, map_location=parent.device)
         self.head = nn.Linear(self.input_dim, self.kmeans.n_clusters)
-
-        # Populate the centroids or they wont be caputured in the state_dict
-        self.kmeans.centroids = T.zeros((parent.csts_dim, self.kmeans.n_clusters))
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
@@ -204,31 +200,6 @@ class KmeansTask(TaskBase):
         pred = T.multinomial(pred, 1).squeeze(1)
         pred = self.kmeans.centroids.index_select(1, pred).T
         plot_continuous(data, pred)
-
-    def on_fit_start(self, parent: nn.Module) -> None:
-        """At the start of the fit, fit the kmeans."""
-        # Skip kmeans has already been initialised (e.g. from a checkpoint)
-        if self.kmeans.centroids is not None and (self.kmeans.centroids > 0).any():
-            return
-
-        # Load the first 50 batches of training data
-        csts = []
-        mask = []
-        loader = parent.trainer.train_dataloader
-        if loader is None:
-            parent.trainer.fit_loop.setup_data()
-            loader = parent.trainer.train_dataloader
-        for i, data in enumerate(loader):
-            csts.append(data["csts"])
-            mask.append(data["mask"])
-            if i > 50:
-                break
-        csts = T.vstack(csts).to(parent.device)
-        mask = T.vstack(mask).to(parent.device)
-
-        # Fit the kmeans
-        inputs = csts[mask].T.contiguous()
-        self.kmeans.fit(inputs)
 
 
 class VQVAETask(TaskBase):
@@ -292,7 +263,7 @@ class ProbeTask(TaskBase):
     def _get_loss(self, parent: nn.Module, data: dict, prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         # We must pass the full outputs through the backbone (no masking)
-        full, full_mask = parent.full_encode(data)
+        full, full_mask = parent.forward(data)
         preds = self.head(full, mask=full_mask)
         loss = cross_entropy(preds, data["labels"])
 

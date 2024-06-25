@@ -74,15 +74,6 @@ kmeans_task = partial(
         "max_iter": 5,
     },
 )
-kmeans_cond_task = partial(
-    KmeansTask,
-    name="kmeans_cond",
-    kmeans_config={
-        "n_clusters": 5,
-        "max_iter": 5,
-    },
-    id_conditional=True,
-)
 diff_task = partial(
     DiffTask,
     name="diff",
@@ -129,6 +120,7 @@ def dummy_input() -> T.Tensor:
     jet_dict["mask"] = T.rand(batch_size, num_csts) > 0.1
     jet_dict["labels"] = T.randint(0, 3, (batch_size,))
     jet_dict["null_mask"] = (T.rand(batch_size, num_csts) > 0.5) & jet_dict["mask"]
+    jet_dict["jets"] = T.rand(batch_size, 5) > 0.5
     return jet_dict
 
 
@@ -138,7 +130,6 @@ tasks = [
     {"reg": reg_task},
     {"flow": flow_task},
     {"kmeans": kmeans_task},
-    {"kmeans_cond_task": kmeans_cond_task},
     {"diff": diff_task},
     {"probe": probe_task},
 ]
