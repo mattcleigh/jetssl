@@ -61,15 +61,20 @@ def main() -> None:
     # Get the arguments
     args = get_args()
 
-    # Get the list of subfolders in the source path using pathlib
-    subfolders = [x for x in Path(args.source_path).iterdir() if x.is_dir()]
+    # Make sure the destination path exists
+    dest_path = Path(args.dest_path)
+    dest_path.mkdir(parents=True, exist_ok=True)
+
+    # Get all of the root files in the source path
+    source_path = Path(args.source_path)
+    subfolders = [x for x in source_path.iterdir() if x.is_dir()]
 
     # Loop over the subfolders
     for subfolder in subfolders:
         print(f"Processing {subfolder.name}")
 
         # Copy the subfolder to the destination path
-        dest_folder = str(subfolder).replace(args.source_path, args.dest_path)
+        dest_folder = dest_path / subfolder.name
 
         # Make the folder
         Path(dest_folder).mkdir(parents=True, exist_ok=True)
@@ -78,19 +83,10 @@ def main() -> None:
         # Sort the files based the number in the name
         files = sorted(files, key=lambda x: int(x.name.split("_")[-1].split(".")[0]))
 
-        # Only process the 50 training files TODO remove this
-        if "train" not in str(subfolder):
-            continue
-        files = files[:50]
-
         # Loop through the files in the subfolder and load the information
         for file in tqdm(files):
             # Define the destination file
-            dest_file = (
-                str(file)
-                .replace(args.source_path, args.dest_path)
-                .replace(".root", ".h5")
-            )
+            dest_file = dest_path / file.name.replace(".root", ".h5")
 
             # Skip if the file already exists
             # if Path(dest_file).exists():

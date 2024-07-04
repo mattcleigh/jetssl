@@ -1,7 +1,7 @@
 defaults:
-  - jetclass_base/cwola@train_set # We use mappable datasets
-  - jetclass_base/cwola@val_set
-  - jetclass_base/cwola@test_set
+  - shared/cwola@train_set # We use mappable datasets
+  - shared/cwola@val_set
+  - shared/cwola@test_set
 
 _target_: src.datamodules.hdf.JetDataModule
 
@@ -24,4 +24,4 @@ loader_config:
     _partial_: true
     fn:
       _target_: joblib.load
-      filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+      filename: ${paths.root_dir}/resources/cst_quant.joblib

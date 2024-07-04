@@ -49,8 +49,8 @@ class JetMappable(Dataset):
         self,
         *,
         path: str,
-        features: list[list],
         n_classes: int,
+        features: list[list] | None = None,
         csts_dim: int | None = None,
         processes: list | str = "all",
         n_files: int | list | None = None,
@@ -83,6 +83,15 @@ class JetMappable(Dataset):
             If not provided, it is calculated from the files and the n_jets.
         """
         super().__init__()
+        # Default features for jetclass
+        if features is None:
+            features = [
+                ["csts", "f", [128]],
+                ["mask", "bool", [128]],
+                ["csts_id", "l", [128]],
+                ["labels", "l", None],
+                ["jets", "f", None],
+            ]
 
         # Processes and the number of jets must be a list for generality
         if isinstance(processes, str):

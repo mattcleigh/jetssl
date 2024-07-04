@@ -1,28 +1,6 @@
-_target_: src.datamodules.hdf_stream.StreamModule
+defaults:
+  - jetclass
 
-train_set:
-  _target_: src.datamodules.hdf_stream.JetHDFStream
-  _partial_: True
-  path: ${paths.data_dir}/JetClassH5/train_100M_combined.h5
-  n_classes: 10
-
-val_set:
-  _target_: src.datamodules.hdf_stream.JetHDFStream
-  _partial_: True
-  path: ${paths.data_dir}/JetClassH5/val_5M_combined.h5
-  n_classes: 10
-  n_jets: 1000_000 # Dont need 5M
-
-test_set:
-  _target_: src.datamodules.hdf_stream.JetHDFStream
-  _partial_: True
-  path: ${paths.data_dir}/JetClassH5/test_20M_combined.h5
-  n_classes: 10
-  n_jets: 1000_000 # Dont need 20M
-
-num_workers: 10
-batch_size: 1000
-pin_memory: True
 transforms:
   - _target_: src.datamodules.preprocessing.batch_masking
     _partial_: true

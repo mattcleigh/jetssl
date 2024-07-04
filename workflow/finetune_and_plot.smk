@@ -19,24 +19,25 @@ container: config["container_path"]
 ########################################
 
 # Define important paths
-project_name = "jetssl_finetune_paper"
+project_name = "jetssl_finetune_paper2"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
-backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/"
+backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl3/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0, 1, 2, 3, 4]
+seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
-model_names = ["untrained", "reg", "diff", "flow", "vae", "kmeans"]
+model_names = ["reg", "diff", "flow", "vae", "kmeans", "mdm", "gpt"]
+fix_backbone = True
 
 # Define the finetuning tasks
 downstream_tasks = [
-    # "jetclass",
-    "shlomi",
-    "vtx",
-    "cwola",
-    "trk",
+    "jetclass",
+    "btag",
+    # "vtx",
+    # "cwola",
+    # "trk",
 ]
 
 ########################################
@@ -54,8 +55,8 @@ for dt in downstream_tasks:
     if dt == "jetclass":
         n_jets = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8]
     # Shlomi doesnt have alot of samples
-    elif dt == "shlomi":
-        n_jets = [1e3, 1e4, 1e5, 543_544]
+    elif dt == "btag":
+        n_jets = [2e3, 2e4, 2e5, 2_023_331]
     # For the cwola task, we need much less jets!
     if dt == "cwola":
         n_jets = [5e2, 1e3, 5e3, 1e4, 1e5]
@@ -112,10 +113,10 @@ for dt in downstream_tasks:
                 # Select the appropriate experiment and data module
                 if dt == "jetclass":
                     ft_rules += "experiment=train_classifier "
-                    ft_rules += "datamodule=jetclass_stream "
-                elif dt == "shlomi":
+                    ft_rules += "datamodule=jetclass "
+                elif dt == "btag":
                     ft_rules += "experiment=train_classifier "
-                    ft_rules += "datamodule=shlomi "
+                    ft_rules += "datamodule=btag "
                 elif dt == "vtx":
                     ft_rules += "experiment=train_vertexer "
                 elif dt == "cwola":
@@ -124,7 +125,7 @@ for dt in downstream_tasks:
                     ft_rules += "experiment=train_tracker "
 
                 # Setting the patience parameter for the classifier tasks
-                if dt in {"jetclass", "shlomi"}:
+                if dt in {"jetclass", "btag"}:
                     if nj < 1e4:
                         ft_rules += "trainer.check_val_every_n_epoch=10 "
                         ft_rules += "callbacks.early_stopping.patience=5 "
@@ -136,22 +137,26 @@ for dt in downstream_tasks:
                         ft_rules += "callbacks.early_stopping.patience=5 "
 
                 # Changine the warmup period to be longer for huge datasets
-                if nj >= 1e7:
-                    ft_rules += "model.scheduler.warmup_steps=40000 " # Default is 5K
+                if not fix_backbone:
+                    if nj >= 1e7:
+                        ft_rules += "model.scheduler.warmup_steps=40000 " # 5K
 
-                # Setting the learning rate to be higher for jetclass
-                if dt == "jetclass" and (nj == 1e8 or m == "untrained"):
-                    ft_rules += "model.optimizer.lr=0.001 " # Default is 1e-4
+                    # Setting the learning rate to be higher for jetclass
+                    if dt == "jetclass" and (nj == 1e8 or m == "untrained"):
+                        ft_rules += "model.optimizer.lr=0.001 " # Default is 1e-4
 
-                # Deciding on when to unfreeze the backbone
-                if m == "untrained":
-                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
-                    ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
-                elif nj >= 1e7:
-                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=20000 "
-                    ft_rules += "callbacks.backbone_finetune.catchup_steps=20000 "
-                elif nj <= 1e3:
-                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=100 "
+                    # Deciding on when to unfreeze the backbone
+                    if m == "untrained":
+                        ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
+                        ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
+                    elif nj >= 1e7:
+                        ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=20000 "
+                        ft_rules += "callbacks.backbone_finetune.catchup_steps=20000 "
+                    elif nj <= 1e3:
+                        ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=100 "
+
+                else: # Fix the backbone
+                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=9999999999999 "
 
                 # Export each model
                 # Takes in: A finetuned model with a successful training txt file
@@ -195,7 +200,7 @@ for dt in downstream_tasks:
                     threads: 8
                     resources:
                         slurm_partition="shared-gpu,private-dpnc-gpu",
-                        runtime=3 * 60,  # minutes
+                        runtime=6 * 60,  # minutes
                         slurm_extra="--gres=gpu:ampere:1",
                         mem_mb=20000,
                     wrapper:

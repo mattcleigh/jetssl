@@ -40,6 +40,18 @@ sh_data = JetMappable(
 print(len(sh_data))
 sh_labels = ["light", "charm", "bottom"]
 
+# Create the datasets
+bt_data = JetMappable(
+    path="/srv/fast/share/rodem/btag",
+    features=features,
+    n_classes=3,
+    processes="train",
+    n_files=1,
+    transforms=pipeline,
+)
+print(len(bt_data))
+sh_labels = ["light", "charm", "bottom"]
+
 jc_data = JetMappable(
     path="/srv/fast/share/rodem/JetClassH5/val_5M/",
     features=features,
@@ -70,8 +82,9 @@ jet_labels = [
 
 
 # Plot distributions of the constituents
-jc_csts = jc_data.data_dict["csts"][jc_data.data_dict["mask"]]
+bt_csts = bt_data.data_dict["csts"][bt_data.data_dict["mask"]]
 sh_csts = sh_data.data_dict["csts"][sh_data.data_dict["mask"]]
+jc_csts = jc_data.data_dict["csts"][jc_data.data_dict["mask"]]
 
 # Make the neutral jc impact parameters nans
 is_neut = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]]
@@ -80,9 +93,9 @@ jc_csts[is_neut, 3:] = np.nan
 
 for i in range(len(cst_features)):
     plot_multi_hists(
-        data_list=[jc_csts[:, i : i + 1], sh_csts[:, i : i + 1]],
+        data_list=[jc_csts[:, i : i + 1], sh_csts[:, i : i + 1], bt_csts[:, i : i + 1]],
         fig_height=4,
-        data_labels=["JetClass", "SVFD"],
+        data_labels=["JetClass", "SVFD", "BTag"],
         bins=25,
         logy=True,
         ignore_nans=True,
@@ -190,7 +203,7 @@ sh_data.transforms = pipeline
 jc_data.transforms = pipeline
 collate_fn = partial(
     batch_preprocess,
-    fn=joblib.load(root / "resources/preprocessor_all.joblib"),
+    fn=joblib.load(root / "resources/cst_quant.joblib"),
 )
 sh_loader = DataLoader(
     sh_data,

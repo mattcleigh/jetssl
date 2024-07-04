@@ -111,7 +111,7 @@ def get_file_list(
     n_proc = len(processes)
 
     # Make a list of all possible files
-    files_per_proc = [list(path.glob(p + "_*.h5")) for p in processes]
+    files_per_proc = [list(path.glob(p + "*.h5")) for p in processes]
     for x in files_per_proc:
         x.sort(key=lambda f: int("".join(filter(str.isdigit, str(f)))))
 

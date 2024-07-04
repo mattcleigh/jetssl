@@ -62,13 +62,17 @@ def main() -> None:
     args = get_args()
 
     # Make sure the destination path exists
-    Path(args.dest_path).mkdir(parents=True, exist_ok=True)
+    dest_path = Path(args.dest_path)
+    dest_path.mkdir(parents=True, exist_ok=True)
 
     # Get all of the root files in the source path
-    root_files = list(Path(args.source_path).iterdir())
+    source_path = Path(args.source_path)
+    root_files = list(source_path.iterdir())
 
     # Loop over the root files
     for file in root_files:
+        print(file)
+
         # Read the root file
         jets, tracks, labels, vtx_pos, track_type = read_shlomi_file(file)
 
@@ -116,9 +120,8 @@ def main() -> None:
         track_type = track_type[idx]
 
         # Save the data to an HDF file
-        dest_file = (
-            str(file).replace(args.source_path, args.dest_path).replace(".root", ".h5")
-        )
+        dest_file = dest_path / file.name.replace(".root", ".h5")
+        print("--saving to: ", dest_file)
         with h5py.File(dest_file, "w") as f:
             f.create_dataset("csts", data=csts)
             f.create_dataset("csts_id", data=csts_id)

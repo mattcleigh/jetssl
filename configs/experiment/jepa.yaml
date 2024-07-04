@@ -25,7 +25,7 @@ datamodule:
       _partial_: true
       fn:
         _target_: joblib.load
-        filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+        filename: ${paths.root_dir}/resources/cst_quant.joblib
 
 trainer:
   max_steps: 1000_000

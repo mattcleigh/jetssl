@@ -34,7 +34,7 @@ jc_labels = list(JC_CLASS_TO_LABEL.keys())
 cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
 
 # Create the dataloader
-preprocessor = joblib.load(root / "resources/preprocessor_all.joblib")
+preprocessor = joblib.load(root / "resources/cst_quant.joblib")
 jc_loader = DataLoader(
     jc_data,
     batch_size=100,

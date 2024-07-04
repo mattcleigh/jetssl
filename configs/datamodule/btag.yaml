@@ -1,12 +1,12 @@
 defaults:
-  - shlomi_base/mappable@train_set
-  - shlomi_base/mappable@val_set
-  - shlomi_base/mappable@test_set
+  - shared/btag@train_set
+  - shared/btag@val_set
+  - shared/btag@test_set
 
 _target_: src.datamodules.hdf.JetDataModule
 
 train_set:
-  processes: training
+  processes: train
 
 val_set:
   processes: valid
@@ -24,4 +24,4 @@ loader_config:
     _partial_: true
     fn:
       _target_: joblib.load
-      filename: ${paths.root_dir}/resources/preprocessor_all.joblib
+      filename: ${paths.root_dir}/resources/cst_quant.joblib

@@ -96,7 +96,7 @@ class JetHDFStream(Dataset):
         transforms : partial
             A callable function to apply during the getitem method
         """
-        # Default features
+        # Default features for jetclass
         if features is None:
             features = [
                 ["csts", "f", [128]],
@@ -186,7 +186,7 @@ class StreamModule(LightningDataModule):
             sampler=BatchSampler(
                 dataset,
                 batch_size=self.batch_size,
-                shuffle=flag == "train",  # Honestly its so big we might not have to
+                shuffle=False,  # flag == "train", Honestly its so big...
                 drop_last=flag == "train",
             ),
             num_workers=self.num_workers,

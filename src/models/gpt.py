@@ -76,22 +76,21 @@ class JetGPT(pl.LightningModule):
         self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim)
 
         # Add the learnable start token
-        self.start_token = nn.Parameter(T.randn((1, 1, self.outp_dim)) * 1e-3)
+        self.start_token = nn.Parameter(T.randn((1, 1, self.encoder.dim)) * 1e-3)
 
-        # Load the VAE model and freeze it
+        # Load clustering model
         if self.do_kmeans:
             self.kmeans = T.load(kmeans_path, map_location="cpu")
-            self.end_clus_id = self.kmeans.centroids.shape[1]
+            self.num_clusters = self.kmeans.centroids.shape[1]
         else:
             self.vae = T.load(vae_path, map_location="cpu")
             self.vae.requires_grad_(False)
             self.vae.eval()
-            self.end_clus_id = self.vae.quantizer.codebook_size
+            self.num_clusters = self.vae.quantizer.codebook_size
 
         # Load the objective heads with extra class for the end token
-        self.head = nn.Linear(self.outp_dim, self.end_clus_id + 1)
+        self.head = nn.Linear(self.outp_dim, self.num_clusters + 1)
         self.id_head = nn.Linear(self.outp_dim, CSTS_ID + 1)
-        self.end_id = CSTS_ID
 
         # Basic classifier and accuracy for evaluating encoder
         self.class_head = class_head(inpt_dim=self.outp_dim, outp_dim=n_classes)
@@ -103,7 +102,7 @@ class JetGPT(pl.LightningModule):
         x = self.csts_emb(csts) + self.csts_id_emb(csts_id)
 
         # Add the start token to the input and the mask
-        st = self.start_token.expand(x.size(0), 1, -1)
+        st = self.start_token.expand(x.size(0), 1, -1)  # Duplicate for batch
         x = T.cat([st, x], dim=1)
         mask = F.pad(mask, (1, 0), value=True)
 
@@ -152,12 +151,14 @@ class JetGPT(pl.LightningModule):
 
         # Insert target for end token
         n_csts = mask.sum(dim=1)[:, None]
-        clus_id = F.pad(clus_id, (0, 1)).scatter_(1, n_csts, self.end_clus_id)
+        clus_id = F.pad(clus_id, (0, 1)).scatter_(1, n_csts, self.num_clusters)
 
         # Get the prediction and return the loss
         clus_out = self.head(enc_out)
-        loss = F.cross_entropy(clus_out[mask_wstart], clus_id[mask_wstart])
-        self.log(f"{prefix}/id_loss", loss)
+        loss = F.cross_entropy(
+            clus_out[mask_wstart], clus_id[mask_wstart], label_smoothing=0.1
+        )
+        self.log(f"{prefix}/clus_loss", loss)
         return loss
 
     def get_id_loss(
@@ -169,12 +170,12 @@ class JetGPT(pl.LightningModule):
     ) -> T.Tensor:
         """Get the loss for the constituent ID."""
         n_csts = mask_wstart.sum(dim=1)[:, None] - 1  # Insert target for end token
-        csts_id = F.pad(csts_id, (0, 1)).scatter_(1, n_csts, self.end_id)
+        csts_id = F.pad(csts_id, (0, 1)).scatter_(1, n_csts, CSTS_ID)
 
         # Get the prediction and return the loss
         id_out = self.id_head(enc_out)
         loss = F.cross_entropy(id_out[mask_wstart], csts_id[mask_wstart])
-        self.log(f"{prefix}/clus_loss", loss)
+        self.log(f"{prefix}/id_loss", loss)
         return loss
 
     def get_probe_loss(
@@ -190,7 +191,7 @@ class JetGPT(pl.LightningModule):
             return T.tensor(0, device=enc_out.device, dtype=enc_out.dtype)
 
         # Make sure to detach the encoder output!
-        class_out = self.class_head(enc_out.detach(), mask=mask_wstart)
+        class_out = self.class_head(enc_out.detach(), mask=mask_wstart.detach())
         loss = F.cross_entropy(class_out, labels)
         acc = getattr(self, f"{prefix}_acc")
         acc(class_out, labels)
@@ -214,6 +215,7 @@ class JetGPT(pl.LightningModule):
             csts_emb=self.csts_emb,
             csts_id_emb=self.csts_id_emb,
             encoder=self.encoder,
+            is_causal=True,
         )
         backbone.eval()
         T.save(backbone, "backbone.pkl")
