@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument(
         "--source_path",
         type=str,
-        default="/srv/beegfs/scratch/groups/rodem/datasets/shlomi/",
+        default="/srv/beegfs/scratch/groups/rodem/datasets/btag/",
         help="The path to the Shlomi files",
     )
     parser.add_argument(

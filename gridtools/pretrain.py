@@ -21,11 +21,11 @@ def main() -> None:
         mem_gb=40,
         opt_dict={
             "network_name": [
-                "kmeans3",
-                "vae3",
-                "reg3",
-                "diff3",
-                "flow3",
+                "kmeans",
+                "vae",
+                "reg",
+                "diff",
+                "flow",
             ],
             "+model/tasks": [
                 "[kmeans,id,probe]",

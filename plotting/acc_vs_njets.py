@@ -51,6 +51,9 @@ def main(cfg: DictConfig):
             row = pd.DataFrame([[model, n_samples, seed, acc]], columns=df.columns)
             df = pd.concat([df, row])
 
+            if n_samples == 100_000_000:
+                print(f"{model} {n_samples} {seed} {acc}")
+
     # Sort the dataframe by the number of samples
     df = df.sort_values(by="n_samples")
 

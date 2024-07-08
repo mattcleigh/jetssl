@@ -28,7 +28,7 @@ plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
-model_names = ["reg", "diff", "flow", "vae", "kmeans", "mdm", "gpt"]
+model_names = ["reg", "diff", "flow", "vae", "kmeans", "mdm", "untrained"]
 fix_backbone = True
 
 # Define the finetuning tasks

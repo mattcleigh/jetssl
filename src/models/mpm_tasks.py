@@ -180,6 +180,10 @@ class KmeansTask(TaskBase):
 
     def __init__(self, parent: nn.Module, kmeans_path: str, **kwargs) -> None:
         super().__init__(input_dim=parent.outp_dim, **kwargs)
+
+        # If using three dimensions replace the suffix with 3
+        if parent.csts_dim == 3:
+            kmeans_path = kmeans_path.replace("_7.pkl", "_3.pkl")
         self.kmeans = T.load(kmeans_path, map_location=parent.device)
         self.head = nn.Linear(self.input_dim, self.kmeans.n_clusters)
 
@@ -264,6 +268,9 @@ class ProbeTask(TaskBase):
         """Get the loss for this task."""
         # We must pass the full outputs through the backbone (no masking)
         full, full_mask = parent.forward(data)
+        if self.detach:  # MAKE SURE THIS IS DETACHED
+            full = full.detach()
+            full_mask = full_mask.detach()
         preds = self.head(full, mask=full_mask)
         loss = cross_entropy(preds, data["labels"])
 

@@ -1,14 +1,14 @@
 _target_: src.models.tracker.Tracker
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl3/backbones/kmeans.pkl
 
 mlp_config:
-  num_blocks: 2
+  num_blocks: 3
   hddn_dim: 128
   dropout: 0.2
   norm: LayerNorm
 
-class_weights: [0.3878, 1.4245, 3.3344, 2.3857]
+class_weights: [0.3868, 1.4342, 3.3482, 2.3896]
 
 defaults:
   - optimizer: default.yaml

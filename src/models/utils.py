@@ -163,3 +163,18 @@ def minimize_padding(x: T.Tensor, mask: T.BoolTensor) -> tuple:
     x = T.gather(x, 1, sort_x)
 
     return x, mask
+
+
+class LinearHead(nn.Module):
+    """Very basice linear pooling head."""
+
+    def __init__(self, inpt_dim: int, outp_dim: int) -> None:
+        super().__init__()
+        self.lin1 = nn.Linear(inpt_dim, inpt_dim)
+        self.lin2 = nn.Linear(inpt_dim, outp_dim)
+
+    def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
+        x = self.lin1(x)
+        x = x * mask.unsqueeze(-1)
+        x = x.sum(dim=1) / mask.sum(dim=1, keepdim=True)
+        return self.lin2(x)

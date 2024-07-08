@@ -9,4 +9,4 @@ kmeans:
   id_conditional: False
   id_embed_dim: 64
 
-  kmeans_path: ${paths.root_dir}/resources/kmeans_16384.pkl
+  kmeans_path: ${paths.root_dir}/resources/kmeans_7.pkl

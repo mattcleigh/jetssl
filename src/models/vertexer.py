@@ -7,7 +7,6 @@ from torch import nn
 from torchmetrics import Accuracy, F1Score
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.loss import bce_with_label_smoothing
 from mltools.mltools.mlp import MLP
 
 if TYPE_CHECKING:
@@ -91,16 +90,15 @@ class Vertexer(LightningModule):
         n_classes: int,
         backbone_path: str,
         vertex_config: dict,
+        loss_fn: partial,
         optimizer: partial,
         scheduler: dict,
-        pos_weight: float = 1.0,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
 
         # Attributes
         self.n_classes = n_classes
-        self.pos_weight = T.tensor(pos_weight)
 
         # Load the pretrained and pickled JetBackbone object.
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
@@ -111,6 +109,7 @@ class Vertexer(LightningModule):
             inpt_dim=self.outp_dim, outp_dim=self.outp_dim, **vertex_config
         )
         self.dist_head = nn.Linear(self.outp_dim, 1)
+        self.loss_fn = loss_fn()
 
         # Metrics
         self.train_metrics = nn.ModuleDict({
@@ -155,17 +154,18 @@ class Vertexer(LightningModule):
         output = self.forward(csts, csts_id, mask).squeeze(-1)
 
         # Calculate the loss and log
-        loss = bce_with_label_smoothing(output[vtx_mask], targ_masked, self.pos_weight)
+        loss = self.loss_fn(output[vtx_mask], targ_masked)
         self.log(f"{prefix}/total_loss", loss)
 
         # Custom Metrics per class
         if prefix == "valid":
             for i in range(self.n_classes):  # Metric calculated per class
                 c_mask = labels == i
+                c_lab = ["light", "charm", "bottom"][i]
                 perf = get_perf(mask[c_mask], vtx_id[c_mask], output[c_mask]).mean()
                 ari = get_ari(mask[c_mask], vtx_id[c_mask], output[c_mask]).mean()
-                self.log(f"{prefix}/perf_{i}", perf)
-                self.log(f"{prefix}/ari_{i}", ari)
+                self.log(f"{prefix}/perf_{c_lab}", perf)
+                self.log(f"{prefix}/ari_{c_lab}", ari)
 
         # Standard Metrics
         metrics = getattr(self, f"{prefix}_metrics")

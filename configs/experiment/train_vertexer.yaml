@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /datamodule: shlomi.yaml
+  - override /datamodule: btag.yaml
   - override /model: vertexer.yaml
   - override /callbacks: finetune.yaml
 
@@ -18,7 +18,7 @@ trainer:
   max_steps: 100_000
 
 # Placeholder as snakemake needs to override this
-n_jets: 543_544
+n_jets: 23102664
 
 # Longer patience
 callbacks:
@@ -26,5 +26,5 @@ callbacks:
     patience: 25
 
 # Bookkeeping
-project_name: jetssl_finetune
+project_name: jetssl_fixed_finetune
 network_name: vertexer

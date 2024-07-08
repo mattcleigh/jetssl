@@ -1,13 +1,21 @@
 _target_: src.models.vertexer.Vertexer
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl2/backbones/kmeans.pkl
-pos_weight: 0.7825 # Calculated from shlomi ratio
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl3/backbones/kmeans.pkl
 
 vertex_config:
   num_blocks: 3
-  hddn_dim: 256
+  hddn_dim: 128
   dropout: 0.2
   norm: LayerNorm
+
+loss_fn:
+  _target_: torch.nn.BCEWithLogitsLoss
+  _partial_: true
+  pos_weight: 0.7780
+  # _target_: mltools.mltools.loss.FocalLoss
+  # _partial_: true
+  # pos_weight: 0.7780
+  # gamma: 3.0
 
 defaults:
   - optimizer: default.yaml

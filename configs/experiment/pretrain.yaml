@@ -19,15 +19,7 @@ trainer:
   max_steps: 1000_000
   val_check_interval: 50_000
 
-# For short training
-# trainer:
-#   max_steps: 200_000
-#   val_check_interval: 5000
-# model:
-#   scheduler:
-#     warmup_steps: 10_000
-
 # Model modifications
-project_name: jetssl2
+project_name: jetssl_fixed
 network_name: test
 full_resume: False

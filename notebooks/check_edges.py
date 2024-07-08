@@ -8,9 +8,9 @@ from src.datamodules.hdf import JetMappable
 # Define the type of information to load into the dict from the HDF files
 # List containing: key, type, slice
 features = [
-    ("csts", "f", [32]),
-    ("csts_id", "f", [32]),
-    ("mask", "bool", [32]),
+    ("csts", "f"),
+    ("csts_id", "f"),
+    ("mask", "bool"),
     ("vtx_id", "l"),
     ("labels", "l"),
     ("track_type", "l"),
@@ -25,6 +25,7 @@ sh_data = JetMappable(
     n_files=1,
 )
 sh_labels = ["light", "charm", "bottom"]
+print(len(sh_data))
 
 csts = T.from_numpy(sh_data.data_dict["csts"])
 mask = T.from_numpy(sh_data.data_dict["mask"])

@@ -8,10 +8,16 @@ hydra:
   run:
     dir: .
 
-path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune_paper/
+path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_finetune_paper2/
 plot_dir: plots/
 outfile: test
 
-models: {}
-  # g: tracker
+models:
+  a: jetclass_diff
+  b: jetclass_mdm
+  c: jetclass_flow
+  d: jetclass_reg
+  e: jetclass_gpt
+  f: jetclass_vae
+  g: jetclass_kmeans
 

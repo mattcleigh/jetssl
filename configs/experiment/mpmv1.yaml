@@ -5,6 +5,7 @@ defaults:
   - override /model: mpm
   - override /model/scheduler: cosine
 
+
 csts_dim: 3
 datamodule:
   train_set:
@@ -28,6 +29,6 @@ model:
     warmup_steps: 10_000
 
 # Model modifications
-project_name: jetssl2
+project_name: jetssl_fixed
 network_name: mpm
 tags: ["ablation"]
