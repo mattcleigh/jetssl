@@ -22,6 +22,8 @@ class BatchSampler(Sampler):
         batch_size: int,
         shuffle: bool = False,
         drop_last: bool = False,
+        start_idx: int = 0,
+        seed: int = 0,
     ):
         """Batch sampler for an h5 dataset.
 
@@ -35,22 +37,32 @@ class BatchSampler(Sampler):
             Shuffle the batches
         drop_last : bool
             Drop the last incomplete batch (if present)
+        start_idx : int
+            The starting index for the batch sampler
+        seed : int
+            The seed for the random number generator
         """
         self.batch_size = batch_size
         self.dataset_length = len(dataset)
         self.n_batches = self.dataset_length // self.batch_size  # full batches
         self.incl_last = not drop_last and (self.dataset_length % self.batch_size != 0)
         self.shuffle = shuffle
+        self.start_idx = start_idx % (self.n_batches + self.incl_last)
+        self.seed = seed
 
     def __len__(self) -> int:
-        return self.n_batches + self.incl_last
+        return self.n_batches + self.incl_last - self.start_idx
 
     def __iter__(self) -> Generator:
         # Create the batch ids
         if self.shuffle:
-            self.batch_ids = T.randperm(self.n_batches)
+            gen = T.Generator().manual_seed(self.seed)
+            self.batch_ids = T.randperm(self.n_batches, generator=gen)
         else:
             self.batch_ids = T.arange(self.n_batches)
+
+        # Trim based on the starting index
+        self.batch_ids = self.batch_ids[self.start_idx :]
 
         # yield full batches from the dataset
         for batch_id in self.batch_ids:
@@ -170,6 +182,8 @@ class StreamModule(LightningDataModule):
         self.transforms = transforms
         self.n_classes = self.val_set.n_classes
         self.val_set.transforms = self.transforms
+        self.last_batch_idx = 0
+        self.last_epoch = 0
 
     def setup(self, stage: str) -> None:
         """Sets up the relevant datasets."""
@@ -181,13 +195,16 @@ class StreamModule(LightningDataModule):
             self.test_set.transforms = self.transforms
 
     def get_dataloader(self, dataset: Dataset, flag: str) -> DataLoader:
+        is_train = flag == "train"
         return DataLoader(
             dataset=dataset,
             sampler=BatchSampler(
                 dataset,
                 batch_size=self.batch_size,
                 shuffle=False,  # flag == "train", Honestly its so big...
-                drop_last=flag == "train",
+                drop_last=is_train,
+                start_idx=self.last_batch_idx * is_train,
+                seed=self.last_epoch * is_train,
             ),
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
@@ -211,3 +228,17 @@ class StreamModule(LightningDataModule):
 
     def predict_dataloader(self) -> DataLoader:
         return self.test_dataloader()
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        self.last_batch_idx = state_dict["last_batch_idx"]
+        self.last_epoch = state_dict["last_epoch"]
+
+    def state_dict(self) -> dict:
+        return {"last_batch_idx": self.last_batch_idx, "last_epoch": self.last_epoch}
+
+    def on_before_batch_transfer(self, batch: dict, dataloader_idx: int) -> None:
+        """Update the last batch index during validation."""
+        if self.trainer.validating:
+            self.last_batch_idx = self.trainer.global_step
+            self.last_epoch = self.trainer.current_epoch
+        return batch

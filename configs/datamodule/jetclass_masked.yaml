@@ -7,7 +7,7 @@ transforms:
     fn:
       _target_: src.datamodules.masking.random_masking
       _partial_: true
-      mask_fraction: 0.5
+      mask_fraction: ${mask_fraction}
   - _target_: src.datamodules.preprocessing.preprocess
     _partial_: true
     fn:

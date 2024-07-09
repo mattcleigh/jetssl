@@ -19,28 +19,45 @@ container: config["container_path"]
 ########################################
 
 # Define important paths
-project_name = "jetssl_finetune_paper2"
+fix_backbone = False
+project_name = "jetssl_fixed_frozen" if fix_backbone else "jetssl_fixed_finetune"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
-backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl3/backbones/"
+backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/backbones/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
 seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
-model_names = ["reg", "diff", "flow", "vae", "kmeans", "mdm", "untrained"]
-fix_backbone = True
+model_names = [
+    # "reg",
+    # "diff",
+    # "flow",
+    # "vae",
+    # "kmeans",
+    "mdm",
+    "untrained",
+    "no_backbone",
+]
+
 
 # Define the finetuning tasks
 downstream_tasks = [
     "jetclass",
-    "btag",
+    # "btag",
     # "vtx",
     # "cwola",
     # "trk",
 ]
 
 ########################################
+
+# If fixed -> use no_backbone as baseline
+if fix_backbone:
+    model_names.remove("untrained")
+# If fine-tuning -> use untrained as baseline
+else:
+    model_names.remove("no_backbone")
 
 # Final rule to form the endpoint of the DAG
 rule all:
@@ -142,11 +159,11 @@ for dt in downstream_tasks:
                         ft_rules += "model.scheduler.warmup_steps=40000 " # 5K
 
                     # Setting the learning rate to be higher for jetclass
-                    if dt == "jetclass" and (nj == 1e8 or m == "untrained"):
+                    if dt == "jetclass" and (nj == 1e8 or m in {"untrained", "no_backbone"}):
                         ft_rules += "model.optimizer.lr=0.001 " # Default is 1e-4
 
                     # Deciding on when to unfreeze the backbone
-                    if m == "untrained":
+                    if m in {"untrained", "no_backbone"}:
                         ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
                         ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
                     elif nj >= 1e7:

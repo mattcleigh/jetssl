@@ -1,6 +1,6 @@
 _target_: mltools.mltools.lightning_utils.linear_warmup_exp_decay
 _partial_: true
-warmup_steps: 50000
+warmup_steps: 50_000
 half_life: 100_000
 init_factor: 0.0 # Be compatible with original models
 final_factor: 0.001

@@ -16,8 +16,11 @@ defaults:
 
 # For long training
 trainer:
-  max_steps: 1000_000
-  val_check_interval: 50_000
+  max_steps: 150_000 #1000_000
+  val_check_interval: 5_000 #50_000
+  reload_dataloaders_every_n_epochs: 1 # Needed for resuming mid-epoch
+
+mask_fraction: 0.5
 
 # Model modifications
 project_name: jetssl_fixed

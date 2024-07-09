@@ -1,5 +1,5 @@
 dim: 128
-num_layers: 3
+num_layers: 2
 do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for mpm

@@ -1,9 +1,9 @@
 _target_: src.models.classifier.Classifier
 
-backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl3/backbones/untrained.pkl
+backbone_path: /srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/backbones/no_backbone.pkl
 
 defaults:
   - optimizer: default.yaml
   - scheduler: cosine.yaml
-  - class_head: ca.yaml
+  - class_head: linear.yaml
   - _self_

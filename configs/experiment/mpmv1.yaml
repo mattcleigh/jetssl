@@ -7,6 +7,8 @@ defaults:
 
 
 csts_dim: 3
+mask_fraction: 0.5
+
 datamodule:
   train_set:
     csts_dim: ${csts_dim}

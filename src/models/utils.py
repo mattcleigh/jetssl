@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import torch as T
 from torch import nn
+from torch.nn import functional as F
 from torchdiffeq import odeint
 
 from mltools.mltools.mlp import MLP
@@ -84,7 +85,7 @@ class JetEncoder(JetBackbone):
         is_causal: bool = False,
     ) -> None:
         cemb_dim = 64 if use_hlv else 0
-        encoder = Transformer(**encoder_config, ctxt=cemb_dim)
+        encoder = Transformer(**encoder_config, ctxt_dim=cemb_dim)
         csts_emb = nn.Linear(csts_dim, encoder.dim)
         csts_id_emb = nn.Embedding(CSTS_ID, encoder.dim) if use_csts_id else None
         jets_emb = nn.Linear(self.ctxt_dim, cemb_dim) if use_hlv else None
@@ -168,13 +169,16 @@ def minimize_padding(x: T.Tensor, mask: T.BoolTensor) -> tuple:
 class LinearHead(nn.Module):
     """Very basice linear pooling head."""
 
-    def __init__(self, inpt_dim: int, outp_dim: int) -> None:
+    def __init__(self, inpt_dim: int, outp_dim: int, nonlin: bool = False) -> None:
         super().__init__()
         self.lin1 = nn.Linear(inpt_dim, inpt_dim)
         self.lin2 = nn.Linear(inpt_dim, outp_dim)
+        self.nonlin = nonlin
 
     def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
         x = self.lin1(x)
+        if self.nonlin:
+            x = F.silu(x)
         x = x * mask.unsqueeze(-1)
         x = x.sum(dim=1) / mask.sum(dim=1, keepdim=True)
         return self.lin2(x)
