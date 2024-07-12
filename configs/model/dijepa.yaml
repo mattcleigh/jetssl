@@ -1,6 +1,7 @@
 _target_: src.models.dijepa.DiJepa
 
 t_ema: 0.995
+embed_dim: 4096 # Prototypes
 
 encoder_config:
   do_final_norm: False # JEPA models all use final norm
@@ -10,7 +11,7 @@ predictor_config:
   num_layers: 3  # JEPA paper used 12
   num_registers: 0 # No registers. Already added before predictor.
   do_packed: True # Much faster training but requires half precision
-  do_final_norm: False # JEPA models all use final norm... Maybe I should too?
+  do_final_norm: True # JEPA models all use final norm... Maybe I should too?
   layer_config:
     num_heads: 4
     ff_mult: 2
@@ -19,5 +20,5 @@ defaults:
   - encoder_config: small.yaml
   - optimizer: default.yaml
   - scheduler: cosine.yaml
-  - class_head: ca.yaml
+  - class_head: linear.yaml
   - _self_

@@ -8,7 +8,7 @@ defaults:
 # Faster warmup
 model:
   scheduler:
-    warmup_steps: 5000
+    warmup_steps: 10_000
   optimizer:
     lr: 1.0e-4
 
@@ -16,18 +16,23 @@ model:
 trainer:
   max_epochs: null
   max_steps: 200_001 # One full epoch as 1e8 jets / 500 batch size + epsilon
+  val_check_interval: 20_000 #50_000
 
 # Key parameters for fine-tuning
 n_jets: 1000_000
 
+csts_dim: 7
 datamodule:
   batch_size: 500 # For smaller GPUs
   train_set:
     n_jets: ${n_jets}
+    csts_dim: ${csts_dim}
   val_set:
     n_jets: ${min:1000_000, ${n_jets}} # 1M for validation is enough
+    csts_dim: ${csts_dim}
   test_set:
     n_jets: 5000_000 # 5M for testing is enough
+    csts_dim: ${csts_dim}
 
 # Bookkeeping
 project_name: jetssl_finetune_paper

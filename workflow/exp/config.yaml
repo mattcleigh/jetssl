@@ -8,7 +8,7 @@ default-resources:
   slurm_partition: shared-cpu,private-dpnc-cpu
   runtime: 60 # minutes
   mem_mb: 4000
-  threads: 6
+  threads: 12
 sdm: apptainer
 apptainer-args: >- # multi-line string
   --nv

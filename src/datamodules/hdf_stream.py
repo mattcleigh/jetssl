@@ -72,7 +72,7 @@ class BatchSampler(Sampler):
 
         # yield the partial batch at the end
         if self.incl_last:
-            start = self.n_batches
+            start = self.n_batches * self.batch_size
             stop = self.dataset_length
             yield np.s_[int(start) : int(stop)]
 

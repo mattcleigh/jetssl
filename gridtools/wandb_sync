@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Base directory where your run directories are located
+# Replace /path/to/your/runs with the actual path
+BASE_DIR="/srv/beegfs/scratch/groups/rodem/jetssl/ablation"
+
+# Loop over each run directory in the base directory
+for run_dir in "$BASE_DIR"/*; do
+  # Check if a wandb directory exists within the run directory
+  if [[ -d "$run_dir/wandb" ]]; then
+    echo "Found wandb directory in $run_dir. Attempting to sync..."
+
+    # Attempt to sync the wandb directory
+    # If an error occurs, it will catch it and continue with the next run directory
+    wandb sync "$run_dir/wandb" || echo "Error syncing $run_dir. Moving to next."
+  else
+    echo "No wandb directory found in $run_dir. Skipping."
+  fi
+done

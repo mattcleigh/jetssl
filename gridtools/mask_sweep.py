@@ -26,7 +26,7 @@ def main() -> None:
             "network_name": [f"mae-kmeans-mf{fr}" for fr in frs],
             "+model/tasks": "[kmeans,id,probe]",
             "experiment": "pretrain.yaml",
-            "datamodule.batch_size": 512,
+            "datamodule.batch_size": 500,
         },
         use_dashes=False,
         is_grid=False,

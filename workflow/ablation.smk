@@ -37,37 +37,38 @@ style_sweep = [
     "mpm-kmeans-7-yesID-MAE-8reg    [kmeans,id,probe] 7  mae   8",
 ]
 depth_sweep = [f"mae-kmeans-depth{d}  {d}" for d in range(1, 5)]
-mask_sweep = [f"mae-kmeans-mask{m*10:.0f}  {m}" for m in map(lambda x: x/10, range(1, 10))]
+mask_sweep = [f"mae-kmeans-mask{m*10:.0f}  {m}" for m in map(lambda x: x/10, range(2, 10))]
 
 # Get the list of models in all the sweeps
-model_names = [m.split()[0] for s in [style_sweep, depth_sweep, mask_sweep] for m in s]
+model_names = [m.split()[0] for s in [depth_sweep, mask_sweep] for m in s]
 
 ########################################
 
 rule all:
     input:
-        expand(output_dir + "jetclass_{m_name}/train_finished.txt", m_name=model_names)
+        expand(f"{output_dir}jetclass_{{m_name}}/train_finished.txt", m_name=model_names)
 
 rule finetune:
     input:
         f"{output_dir}{{m_name}}/backbone.pkl"
     output:
-        output_dir + "jetclass_{m_name}/train_finished.txt",
+        f"{output_dir}jetclass_{{m_name}}/train_finished.txt",
     params:
         "scripts/train.py",
         "experiment=train_classifier",
-        "network_name={m_name}",
+        "network_name=jetclass_{m_name}",
         f"project_name={project_name}",
-        f"model.backbone_path={output_dir}/{{m_name}}/backbone.pkl",
+        f"model.backbone_path={output_dir}{{m_name}}/backbone.pkl",
         "trainer.max_steps=200_000",
         "n_jets=100000000", # All 100M jets
-    threads: 8
+        "callbacks.backbone_finetune.unfreeze_at_step=9999999999",
+        lambda w : f"csts_dim={3 if '-3-noID-BERT-0reg' in w.m_name else 7}",
+    threads: 12
     resources:
         slurm_partition="shared-gpu,private-dpnc-gpu",
         runtime=12 * 60,  # minutes
         slurm_extra="--gres=gpu:ampere:1",
         mem_mb=20000,
-        threads=12,
     wrapper:
         "file:hydra_cli"
 
@@ -78,26 +79,25 @@ for model in style_sweep:
         name:
             f"pretrain_{m_name}"
         output:
-            f"{output_dir}{m_name}/backbone.pkl"
+            protected(f"{output_dir}{m_name}/backbone.pkl")
         params:
             "scripts/train.py",
             "experiment=mpmv1",
             f"network_name={m_name}",
             f"project_name={project_name}",
-            f"+model.tasks={tasks}",
+            f"+model/tasks={tasks}",
             f"csts_dim={csts_dim}",
             f"model.objective={objective}",
             f"model.encoder_config.num_registers={num_registers}",
             "trainer.max_steps=200_000",
             "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=512",
-        threads: 8
+            "datamodule.batch_size=500",
+        threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
             runtime=12 * 60,  # minutes
             slurm_extra="--gres=gpu:ampere:1",
             mem_mb=20000,
-            threads=12,
         wrapper:
             "file:hydra_cli"
 
@@ -108,24 +108,23 @@ for model in depth_sweep:
         name:
             f"pretrain_{m_name}"
         output:
-            f"{output_dir}{m_name}/backbone.pkl"
+            protected(f"{output_dir}{m_name}/backbone.pkl")
         params:
             "scripts/train.py",
             "experiment=pretrain",
             f"network_name={m_name}",
             f"project_name={project_name}",
             f"model.decoder_config.num_layers={depth}",
-            "+model.tasks=[kmeans,id,probe]",
+            "+model/tasks=[kmeans,id,probe]",
             "trainer.max_steps=200_000",
             "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=512",
-        threads: 8
+            "datamodule.batch_size=500",
+        threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
             runtime=12 * 60,  # minutes
             slurm_extra="--gres=gpu:ampere:1",
             mem_mb=20000,
-            threads=12,
         wrapper:
             "file:hydra_cli"
 
@@ -136,23 +135,22 @@ for model in mask_sweep:
         name:
             f"pretrain_{m_name}"
         output:
-            f"{output_dir}{m_name}/backbone.pkl"
+            protected(f"{output_dir}{m_name}/backbone.pkl")
         params:
             "scripts/train.py",
             "experiment=pretrain",
             f"network_name={m_name}",
             f"project_name={project_name}",
             f"mask_fraction={mask_fraction}",
-            "+model.tasks=[kmeans,id,probe]",
+            "+model/tasks=[kmeans,id,probe]",
             "trainer.max_steps=200_000",
             "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=512",
-        threads: 8
+            "datamodule.batch_size=500",
+        threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
             runtime=12 * 60,  # minutes
             slurm_extra="--gres=gpu:ampere:1",
             mem_mb=20000,
-            threads=12,
         wrapper:
             "file:hydra_cli"

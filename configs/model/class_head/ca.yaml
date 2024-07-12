@@ -1,6 +1,6 @@
 _target_: mltools.mltools.transformers.ClassAttentionPooling
 _partial_: true
-num_layers: 1
+num_layers: 2
 dim: 128
 layer_config:
   num_heads: 4

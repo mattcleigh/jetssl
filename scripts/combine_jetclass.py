@@ -77,7 +77,11 @@ def main() -> None:
                 # Create the dataset if it doesn't exist
                 if row == 0:
                     h5fw.create_dataset(
-                        k, dtype=v.dtype, shape=v.shape, maxshape=(None, *v.shape[1:])
+                        k,
+                        dtype=v.dtype,
+                        shape=v.shape,
+                        chunks=(1000, *v.shape[1:]),
+                        maxshape=(None, *v.shape[1:]),
                     )
 
                 # Resize the target table if it is too small

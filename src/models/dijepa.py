@@ -2,6 +2,7 @@ from functools import partial
 
 import pytorch_lightning as pl
 import torch as T
+import wandb
 from torch import nn
 from torch.nn.functional import (
     cross_entropy,
@@ -12,7 +13,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import ema_param_sync
+from mltools.mltools.torch_utils import ema_param_sync, reset_params
 from mltools.mltools.transformers import Transformer
 from src.models.utils import MLP, JetEncoder
 
@@ -75,7 +76,7 @@ class Predictor(nn.Module):
         x = self.encoder(x, mask=mask)
 
         # Project back to the original space (dont need registers)
-        return self.output_proj(x)[:, -S:]
+        return self.output_proj(x)
 
 
 class DINOHead(nn.Module):
@@ -166,6 +167,7 @@ class DiJepa(pl.LightningModule):
         # Attributes
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
+        self.embed_dim = embed_dim
         self.t_ema = t_ema
 
         # The student and teacher models
@@ -187,6 +189,7 @@ class DiJepa(pl.LightningModule):
         # Create the projection heads
         self.student_head = DINOHead(self.dim, outp_dim=embed_dim)
         self.teacher_head = DINOHead(self.dim, outp_dim=embed_dim)
+        self.teacher_head.requires_grad_(False)
 
         # The predictor for mapping between the student and teacher spaces
         self.predictor = Predictor(self.dim, self.num_csts, **predictor_config)
@@ -209,56 +212,74 @@ class DiJepa(pl.LightningModule):
         _B, S = mask.shape
         s_out, _s_mask = self.student(csts, csts_id, mask & ~null_mask)
 
-        # Pass the inputs through the teacher without the dropping
+        # Pass the inputs through the teacher without any dropping
         with T.no_grad():
             self.teacher.eval()
             t_out, t_mask = self.teacher(csts, csts_id, mask)
-            t_cst = t_out[:, -S:]  # Not the registers
+            t_cst = t_out[:, -S:][null_mask]
+            t_reg = t_out[:, :-S]
 
         # Pass through the predictor using the t_mask (non-dropped with reg)
-        s_cst = self.predictor(s_out, t_mask, null_mask)
+        s_out = self.predictor(s_out, t_mask, null_mask)
+        s_cst = s_out[:, -S:][null_mask]
+        s_reg = s_out[:, :-S]
 
-        # Pass only the dropped nodes through the heads
-        s_cst = self.student_head(s_cst[null_mask])
-        t_cst = self.teacher_head(t_cst[null_mask])
+        # Get the outputs of the heads
+        t_cst = self.teacher_head(t_cst)
+        t_reg = self.teacher_head(t_reg)
+        s_cst = self.student_head(s_cst)
+        s_reg = self.student_head(s_reg)
 
         # Get the loss using the teacher and predictor outputs
-        loss = dinov2_loss(s_cst, t_cst)
+        cst_loss = dinov2_loss(s_cst, t_cst)
+        self.log(f"{prefix}/dino_cst_loss", cst_loss)
+
+        # Get the loss using the teacher and student registers
+        reg_loss = dinov2_loss(s_reg, t_reg)
+        self.log(f"{prefix}/dino_reg_loss", reg_loss)
 
         # Run the probe to evaluate the embedding using the teacher's output
         # In MPM we typically do it every 50 batches.
+        probe_loss = 0.0
         if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.class_head(t_out.detach(), mask=t_mask.detach())
             probe_loss = cross_entropy(class_out, labels)
             acc = getattr(self, f"{prefix}_acc")
             acc(class_out, labels)
             self.log(f"{prefix}/probe_accuracy", acc)
-        else:
-            probe_loss = 0.0
+            self.log(f"{prefix}/probe_loss", probe_loss)
 
-        # Combine and log the losses
-        total_loss = loss + probe_loss
-        self.log(f"{prefix}/total_loss", loss)
-        self.log(f"{prefix}/probe_loss", probe_loss)
+        # Log the total loss
+        total_loss = cst_loss + reg_loss + probe_loss
+        self.log(f"{prefix}/total_loss", total_loss)
 
         # Log the occupancy of the teacher outputs
-        occ = T.unique(T.argmax(t_out, dim=-1)).size(0) / self.dim
-        self.log(f"{prefix}/occ", occ)
-
+        if batch_idx % 100 == 0:
+            cst_ids = T.argmax(t_cst, dim=-1)
+            reg_ids = T.argmax(t_reg, dim=-1)
+            cst_occ = T.unique(cst_ids).size(0) / self.embed_dim
+            reg_occ = T.unique(reg_ids).size(0) / self.embed_dim
+            self.log(f"{prefix}/cst_occ", cst_occ)
+            self.log(f"{prefix}/reg_occ", reg_occ)
+            if wandb.run is not None:
+                wandb.log({"cst_ids": wandb.Histogram(cst_ids.cpu().numpy())})
+                wandb.log({"reg_ids": wandb.Histogram(reg_ids.cpu().numpy())})
         return total_loss
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
         ema_param_sync(self.student, self.teacher, self.t_ema)
+        ema_param_sync(self.student_head, self.teacher_head, self.t_ema)
         return self._shared_step(sample, batch_idx, "train")
 
     def validation_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
         return self._shared_step(sample, batch_idx, "valid")
 
     def configure_optimizers(self) -> dict:
-        """Use the mltools optimiser and scheduler."""
+        """Have a seperate optimizer for the student and the class head."""
         return simple_optim_sched(self)
 
     def on_validation_epoch_end(self) -> None:
         """Create the pickled object for the backbone out of the teacher components."""
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")
+        self.class_head.apply(reset_params)
