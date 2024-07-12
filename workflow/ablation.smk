@@ -38,9 +38,10 @@ style_sweep = [
 ]
 depth_sweep = [f"mae-kmeans-depth{d}  {d}" for d in range(1, 5)]
 mask_sweep = [f"mae-kmeans-mask{m*10:.0f}  {m}" for m in map(lambda x: x/10, range(2, 10))]
+# hlv_sweep = [f"mae-{method}-hlv {method}" for method in ["kmeans", "reg"]]
 
 # Get the list of models in all the sweeps
-model_names = [m.split()[0] for s in [depth_sweep, mask_sweep] for m in s]
+model_names = [m.split()[0] for s in [style_sweep, depth_sweep, mask_sweep] for m in s]
 
 ########################################
 
@@ -154,3 +155,30 @@ for model in mask_sweep:
             mem_mb=20000,
         wrapper:
             "file:hydra_cli"
+
+# for model in hlv_sweep:
+#     m_name, method = model.split()
+
+#     rule:
+#         name:
+#             f"pretrain_{m_name}"
+#         output:
+#             protected(f"{output_dir}{m_name}/backbone.pkl")
+#         params:
+#             "scripts/train.py",
+#             "experiment=pretrain",
+#             f"network_name={m_name}",
+#             f"project_name={project_name}",
+#             f"+model/tasks=[{method},id,probe]",
+#             f"model.use_hlv=True",
+#             "trainer.max_steps=200_000",
+#             "model.scheduler.warmup_steps=10_000",
+#             "datamodule.batch_size=500",
+#         threads: 12
+#         resources:
+#             slurm_partition="shared-gpu,private-dpnc-gpu",
+#             runtime=12 * 60,  # minutes
+#             slurm_extra="--gres=gpu:ampere:1",
+#             mem_mb=40000,
+#         wrapper:
+#             "file:hydra_cli"

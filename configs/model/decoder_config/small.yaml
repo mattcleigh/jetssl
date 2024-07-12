@@ -1,5 +1,5 @@
 dim: 128
-num_layers: 2
+num_layers: 4 # Deeper seems to be better but lets keep it at 4 for now
 do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for mpm
@@ -8,9 +8,3 @@ do_final_norm: False # Doesn't seem to help
 layer_config:
   num_heads: 4
   ff_mult: 2
-
-# Decoder performances
-# 1 -> 0.826
-# 2 -> 0.831
-# 3 -> 0.827
-# 4 -> 0.828

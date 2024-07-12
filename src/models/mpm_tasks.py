@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
@@ -99,15 +100,24 @@ class TaskBase(nn.Module):
 class IDTask(TaskBase):
     """Task for predicting the ID of the constituent."""
 
-    def __init__(self, parent: nn.Module, **kwargs) -> None:
+    def __init__(
+        self,
+        parent: nn.Module,
+        use_weights: bool = False,
+        class_weights: list | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(input_dim=parent.outp_dim, **kwargs)
         self.head = nn.Linear(self.input_dim, CSTS_ID)
+        self.class_weights = T.tensor(class_weights, T.float32) if use_weights else None
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
         pred = self.head(self.get_head_input(data))
         target = data["csts_id"][data["null_mask"]]
-        return cross_entropy(pred, target, label_smoothing=0.1)
+        return cross_entropy(
+            pred, target, label_smoothing=0.1, weight=self.class_weights
+        )
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
@@ -178,7 +188,9 @@ class FlowTask(TaskBase):
 class KmeansTask(TaskBase):
     """Task for modelling the properties of the constituent using kmeans clustering."""
 
-    def __init__(self, parent: nn.Module, kmeans_path: str, **kwargs) -> None:
+    def __init__(
+        self, parent: nn.Module, kmeans_path: str, use_weights: bool = False, **kwargs
+    ) -> None:
         super().__init__(input_dim=parent.outp_dim, **kwargs)
 
         # If using three dimensions replace the suffix with 3
@@ -186,6 +198,7 @@ class KmeansTask(TaskBase):
             kmeans_path = kmeans_path.replace("_7.pkl", "_3.pkl")
         self.kmeans = T.load(kmeans_path, map_location=parent.device)
         self.head = nn.Linear(self.input_dim, self.kmeans.n_clusters)
+        self.class_weights = self.kmeans.weights if use_weights else None
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
@@ -195,7 +208,9 @@ class KmeansTask(TaskBase):
 
         # Get the predictions and calculate the loss
         pred = self.head(self.get_head_input(data))
-        return cross_entropy(pred, target, label_smoothing=0.1)
+        return cross_entropy(
+            pred, target, label_smoothing=0.1, weight=self.class_weights
+        )
 
     def _visualise(self, parent: nn.Module, data: dict) -> dict:
         """Sample and plot the outputs of the head."""
@@ -265,12 +280,15 @@ class ProbeTask(TaskBase):
         self.valid_acc = Accuracy("multiclass", num_classes=parent.n_classes)
 
     def _get_loss(self, parent: nn.Module, data: dict, prefix: str) -> T.Tensor:
-        """Get the loss for this task."""
-        # We must pass the full outputs through the backbone (no masking)
-        full, full_mask = parent.forward(data)
-        if self.detach:  # MAKE SURE THIS IS DETACHED
+        """Get the loss for this task which requires no masking."""
+        with T.no_grad() if self.detach else nullcontext():
+            full, full_mask = parent.forward(data)
+
+        # Possibly redundant BUT MAKE SURE ITS DETACHED!!!
+        if self.detach:
             full = full.detach()
             full_mask = full_mask.detach()
+
         preds = self.head(full, mask=full_mask)
         loss = cross_entropy(preds, data["labels"])
 

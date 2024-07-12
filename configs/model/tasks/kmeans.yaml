@@ -10,3 +10,4 @@ kmeans:
   id_embed_dim: 64
 
   kmeans_path: ${paths.root_dir}/resources/kmeans_7.pkl
+  use_weights: False
