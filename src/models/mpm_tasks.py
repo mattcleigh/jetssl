@@ -109,7 +109,9 @@ class IDTask(TaskBase):
     ) -> None:
         super().__init__(input_dim=parent.outp_dim, **kwargs)
         self.head = nn.Linear(self.input_dim, CSTS_ID)
-        self.class_weights = T.tensor(class_weights, T.float32) if use_weights else None
+        self.register_buffer("class_weights", None)
+        if use_weights:
+            self.class_weights = T.tensor(class_weights, dtype=T.float32)
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""
@@ -198,7 +200,11 @@ class KmeansTask(TaskBase):
             kmeans_path = kmeans_path.replace("_7.pkl", "_3.pkl")
         self.kmeans = T.load(kmeans_path, map_location=parent.device)
         self.head = nn.Linear(self.input_dim, self.kmeans.n_clusters)
-        self.class_weights = self.kmeans.weights if use_weights else None
+
+        # Load the class weights using the kmeans module itself
+        self.register_buffer("class_weights", None)
+        if use_weights:
+            self.class_weights = self.kmeans.weights
 
     def _get_loss(self, parent: nn.Module, data: dict, _prefix: str) -> T.Tensor:
         """Get the loss for this task."""

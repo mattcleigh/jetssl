@@ -13,7 +13,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import ema_param_sync, reset_params
+from mltools.mltools.torch_utils import ema_param_sync
 from mltools.mltools.transformers import Transformer
 from src.models.utils import MLP, JetEncoder
 
@@ -240,7 +240,7 @@ class DiJepa(pl.LightningModule):
 
         # Run the probe to evaluate the embedding using the teacher's output
         # In MPM we typically do it every 50 batches.
-        probe_loss = 0.0
+        probe_loss = T.tensor(0.0, device=self.device)
         if batch_idx % 50 == 0 or prefix == "valid":
             class_out = self.class_head(t_out.detach(), mask=t_mask.detach())
             probe_loss = cross_entropy(class_out, labels)
@@ -264,6 +264,12 @@ class DiJepa(pl.LightningModule):
             if wandb.run is not None:
                 wandb.log({"cst_ids": wandb.Histogram(cst_ids.cpu().numpy())})
                 wandb.log({"reg_ids": wandb.Histogram(reg_ids.cpu().numpy())})
+
+        # Check each of the losses for NaNs
+        for loss in [("cst", cst_loss), ("reg", reg_loss), ("probe", probe_loss)]:
+            if T.isnan(loss[1]):
+                raise ValueError(f"NaN in {loss[0]} loss.")
+
         return total_loss
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
@@ -282,4 +288,3 @@ class DiJepa(pl.LightningModule):
         """Create the pickled object for the backbone out of the teacher components."""
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")
-        self.class_head.apply(reset_params)

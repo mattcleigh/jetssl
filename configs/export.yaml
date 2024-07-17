@@ -5,6 +5,6 @@ defaults:
   - paths: default.yaml
   - _self_
 
-project_name: jetssl_finetune_paper
-network_name: shlomi_diff_100000_0
+project_name: setme
+network_name: setme
 ckpt_flag: best.ckpt

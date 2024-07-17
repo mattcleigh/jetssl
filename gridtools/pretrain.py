@@ -16,7 +16,7 @@ def main() -> None:
         n_gpus=1,
         n_cpus=16,
         gpu_type="ampere",
-        vram_per_gpu=40,
+        vram_per_gpu=20,
         time_hrs=4 * 24,
         mem_gb=40,
         opt_dict={

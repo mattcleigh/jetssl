@@ -8,7 +8,7 @@ id:
   apply_every: 1
   # Never set id_conditional: True else we give the targets to the model\
 
-  use_weights: False
+  use_weights: ${use_weights}
   class_weights: [
     0.02112238,
     0.03667253,

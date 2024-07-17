@@ -10,11 +10,11 @@ train_set:
 
 val_set:
   path: ${paths.data_dir}/JetClassH5/val_5M_combined.h5
-  n_jets: 1000_0 # Dont need 5M
+  n_jets: 1000_000 # Really dont need 5M
 
 test_set:
   path: ${paths.data_dir}/JetClassH5/test_20M_combined.h5
-  n_jets: 5000_000 # Dont need 20M
+  n_jets: 2000_000 # Really dont need 20M
 
 num_workers: 2 # Keep having issues with num_workers > 1 :(
 batch_size: 1000

@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Run using
 # pip install snakemake-executor-plugin-slurm==0.4.1 snakemake==8.4.1
-# snakemake --snakefile workflow/finetune_and_plot.smk --workflow-profile workflow/exp --configfile workflow/config.yaml
+# snakemake --snakefile workflow/full_pipeline.smk --workflow-profile workflow/exp --configfile workflow/config.yaml
 # -e dryrun --dag | dot -Tpng > dag.png
 
 
@@ -19,45 +19,46 @@ container: config["container_path"]
 ########################################
 
 # Define important paths
-fix_backbone = False
+debug_mode = True
+fix_backbone = True
 project_name = "jetssl_fixed_frozen" if fix_backbone else "jetssl_fixed_finetune"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
-backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/backbones/"
+backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0] #, 1, 2, 3, 4]
+seeds = [0, 1, 2]
 
 # Define the model backbones to finetune
 model_names = [
-    # "reg",
-    # "diff",
-    # "flow",
-    # "vae",
-    # "kmeans",
+    "reg",
+    "diff",
+    "flow",
+    "vae",
+    "kmeans",
     "mdm",
     "untrained",
-    "no_backbone",
+    "nobackbone",
 ]
 
 
 # Define the finetuning tasks
 downstream_tasks = [
     "jetclass",
-    # "btag",
-    # "vtx",
-    # "cwola",
-    # "trk",
+    "cwola",
+    "btag",
+    "vtx",
+    "trk",
 ]
 
 ########################################
 
-# If fixed -> use no_backbone as baseline
+# If fixed -> use nobackbone as baseline
 if fix_backbone:
     model_names.remove("untrained")
 # If fine-tuning -> use untrained as baseline
 else:
-    model_names.remove("no_backbone")
+    model_names.remove("nobackbone")
 
 # Final rule to form the endpoint of the DAG
 rule all:
@@ -71,7 +72,7 @@ for dt in downstream_tasks:
     # Standard classification we want the full dataset
     if dt == "jetclass":
         n_jets = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8]
-    # Shlomi doesnt have alot of samples
+    # btag doesnt have alot of samples
     elif dt == "btag":
         n_jets = [2e3, 2e4, 2e5, 2_023_331]
     # For the cwola task, we need much less jets!
@@ -79,7 +80,7 @@ for dt in downstream_tasks:
         n_jets = [5e2, 1e3, 5e3, 1e4, 1e5]
     # For the vertexing task or tracking, we use all jets only
     elif dt in {"vtx", "trk"}:
-        n_jets = [543_544]
+        n_jets = [2_023_331]
     n_jets = [int(j) for j in n_jets]
 
     # Which plotting script to run
@@ -91,6 +92,12 @@ for dt in downstream_tasks:
         plot_script = "plotting/trk_perf.py"
     else:
         plot_script = "plotting/acc_vs_njets.py"
+
+    # Trim everything if we are in debug mode
+    if debug_mode:
+        n_jets = n_jets[:1]
+        seeds = seeds[:1]
+        model_names = model_names[:1]
 
     # Plotting rule
     # Takes in: Exported scores from each model per n_jets
@@ -159,11 +166,11 @@ for dt in downstream_tasks:
                         ft_rules += "model.scheduler.warmup_steps=40000 " # 5K
 
                     # Setting the learning rate to be higher for jetclass
-                    if dt == "jetclass" and (nj == 1e8 or m in {"untrained", "no_backbone"}):
+                    if dt == "jetclass" and (nj == 1e8 or m in {"untrained", "nobackbone"}):
                         ft_rules += "model.optimizer.lr=0.001 " # Default is 1e-4
 
                     # Deciding on when to unfreeze the backbone
-                    if m in {"untrained", "no_backbone"}:
+                    if m in {"untrained", "nobackbone"}:
                         ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
                         ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
                     elif nj >= 1e7:
@@ -173,7 +180,12 @@ for dt in downstream_tasks:
                         ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=100 "
 
                 else: # Fix the backbone
-                    ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=9999999999999 "
+                    # Never fix the nobackbone model
+                    if m == "nobackbone":
+                        ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=1 "
+                        ft_rules += "callbacks.backbone_finetune.catchup_steps=1 "
+                    else:
+                        ft_rules += "callbacks.backbone_finetune.unfreeze_at_step=9999999999999 "
 
                 # Export each model
                 # Takes in: A finetuned model with a successful training txt file
@@ -210,7 +222,7 @@ for dt in downstream_tasks:
                         "scripts/train.py",
                         f"network_name={model_id}",
                         f"project_name={project_name}",
-                        f"model.backbone_path={backbones}{m}.pkl",
+                        f"model.backbone_path={backbones}{m}/backbone.pkl",
                         f"n_jets={nj}",
                         f"seed={s}",
                         ft_rules,
@@ -222,4 +234,3 @@ for dt in downstream_tasks:
                         mem_mb=20000,
                     wrapper:
                         "file:hydra_cli"
-

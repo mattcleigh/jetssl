@@ -16,7 +16,6 @@ model:
 trainer:
   max_epochs: null
   max_steps: 200_001 # One full epoch as 1e8 jets / 500 batch size + epsilon
-  val_check_interval: 20_000 #50_000
 
 # Key parameters for fine-tuning
 n_jets: 1000_000
@@ -28,10 +27,10 @@ datamodule:
     n_jets: ${n_jets}
     csts_dim: ${csts_dim}
   val_set:
-    n_jets: ${min:1000_000, ${n_jets}} # 1M for validation is enough
+    n_jets: ${min:1000_000, ${n_jets}} # Cap at 1M for validation is enough
     csts_dim: ${csts_dim}
   test_set:
-    n_jets: 5000_000 # 5M for testing is enough
+    n_jets: 2000_000 # 2M for testing is enough
     csts_dim: ${csts_dim}
 
 # Bookkeeping

@@ -20,6 +20,8 @@ trainer:
   val_check_interval: 50_000
   reload_dataloaders_every_n_epochs: 1 # Needed for resuming mid-epoch
 
+csts_dim: 7
+use_weights: False
 mask_fraction: 0.4 # Determined to be the best value for the dataset
 
 # Model modifications

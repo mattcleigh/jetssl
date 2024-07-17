@@ -6,6 +6,6 @@ layer_config:
   num_heads: 4
   ff_mult: 1
   dropout: 0.2
-  layerscale_init: null # Its just a single layer no need for layer scale
+  layerscale_init: null # Don't use layerscale on class pooling!
 do_input_linear: True
 do_output_linear: True

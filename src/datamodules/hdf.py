@@ -86,9 +86,9 @@ class JetMappable(Dataset):
         # Default features for jetclass
         if features is None:
             features = [
-                ["csts", "f", [128]],
-                ["mask", "bool", [128]],
-                ["csts_id", "l", [128]],
+                ["csts", "f", [None]],
+                ["mask", "bool", [None]],
+                ["csts_id", "l", [None]],
                 ["labels", "l", None],
                 ["jets", "f", None],
             ]
@@ -107,13 +107,13 @@ class JetMappable(Dataset):
         # Insert the csts dim into the features
         # This is a hack but we need the csts to change with hydra for now
         if csts_dim is not None:
-            print("Warning! Explicitly setting the csts dimension")
-            print("This is a hack and should be removed in the future!")
+            log.info("Warning! Explicitly setting the csts dimension")
+            log.info("This is a hack and should be removed in the future!")
             c_idx = [i for i, f in enumerate(features) if f[0] == "csts"][0]
             curr = features[c_idx][-1]
             features[c_idx][-1] = [curr, [csts_dim]]
-            print("New feature slice for csts:")
-            print(features[c_idx])
+            log.info("New feature slice for csts:")
+            log.info(features[c_idx])
 
         # Class attributes
         self.path = Path(path)

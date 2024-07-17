@@ -8,6 +8,10 @@ from torch import nn
 from mltools.mltools.transformers import Transformer
 from src.models.utils import JetBackbone
 
+backbone = T.load(
+    "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/reg/backbone.pkl"
+)
+
 jb = JetBackbone(
     encoder=Transformer(dim=512, num_layers=0),
     csts_emb=nn.Linear(7, 512),
@@ -15,7 +19,7 @@ jb = JetBackbone(
 )
 jb.eval()
 T.save(
-    jb, "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/backbones/no_backbone.pkl"
+    jb, "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/backbones/nobackbone.pkl"
 )
 
 # from pathlib import Path

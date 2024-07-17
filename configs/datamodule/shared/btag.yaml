@@ -1,14 +1,14 @@
-  _target_: src.datamodules.hdf.JetMappable
-  _partial_: True
-  path: ${paths.data_dir}/btag
-  n_classes: 3
-  n_files: 1
-  features:
-  - [csts, f, null]
-  - [mask, bool, null]
-  - [csts_id, l, null]
-  - [labels, l, null]
-  - [vtx_id, l, null]
-  - [vtx_pos, l, null]
-  - [track_type, l, null]
-  - [jets, f, null]
+_target_: src.datamodules.hdf.JetMappable
+_partial_: True
+path: ${paths.data_dir}/btag
+n_classes: 3
+n_files: 1
+features:
+- [csts, f, [null]] # Need an extra brackets to allow additional slicing
+- [mask, bool, null]
+- [csts_id, l, null]
+- [labels, l, null]
+- [vtx_id, l, null]
+- [vtx_pos, l, null]
+- [track_type, l, null]
+- [jets, f, null]

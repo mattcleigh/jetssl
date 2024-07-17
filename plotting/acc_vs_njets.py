@@ -22,7 +22,8 @@ def main(cfg: DictConfig):
     model_list = list(cfg.models.values())
 
     # Create the pandas dataframe to hold all the run information
-    df = pd.DataFrame(columns=["model", "n_samples", "seed", "accuracy"])
+    columns = ["model", "n_samples", "seed", "accuracy"]
+    rows = []
 
     # For each model find all variants and seeds
     for run in model_list:
@@ -45,14 +46,15 @@ def main(cfg: DictConfig):
             except FileNotFoundError:
                 continue
             pred = np.argmax(outputs, axis=1, keepdims=True)
-            acc = (labels == pred).mean()
+            acc = (labels == pred).mean() * 100  # Percentage
 
             # Add the information to the dataframe
-            row = pd.DataFrame([[model, n_samples, seed, acc]], columns=df.columns)
-            df = pd.concat([df, row])
+            rows.append([model, n_samples, seed, acc])
 
             if n_samples == 100_000_000:
                 print(f"{model} {n_samples} {seed} {acc}")
+
+    df = pd.DataFrame(rows, columns=columns)
 
     # Sort the dataframe by the number of samples
     df = df.sort_values(by="n_samples")
@@ -86,6 +88,14 @@ def main(cfg: DictConfig):
                 alpha=0.2,
                 color=line[0].get_color(),
             )
+
+        # Print the final accuracies
+        n_samples = data["n_samples"]
+        means = data["accuracy"]["mean"]
+        stds = data["accuracy"]["std"]
+        print(f"Model: {m}")
+        for i in range(len(n_samples)):
+            print(f"  {n_samples[i]}: {means[i]:.2f} +/- {stds[i]:.2f}")
 
     ax.set_xlabel("Number of training samples")
     ax.set_ylabel("Accuracy")

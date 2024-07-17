@@ -21,5 +21,5 @@ quantizer_config:
 defaults:
   - optimizer: default.yaml
   - scheduler: cosine.yaml
-  - class_head: ca.yaml
+  - class_head: linear.yaml
   - _self_

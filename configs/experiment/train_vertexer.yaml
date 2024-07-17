@@ -5,7 +5,7 @@ defaults:
   - override /model: vertexer.yaml
   - override /callbacks: finetune.yaml
 
-# Faster warmup but slower startup time
+# Faster warmup
 model:
   scheduler:
     warmup_steps: 5000

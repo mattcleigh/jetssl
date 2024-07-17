@@ -5,6 +5,7 @@ defaults:
   - override /model: mpm
   - override /model/scheduler: cosine
 
+use_weights: False
 csts_dim: 3
 mask_fraction: 0.5
 

@@ -167,7 +167,7 @@ def minimize_padding(x: T.Tensor, mask: T.BoolTensor) -> tuple:
 
 
 class LinearHead(nn.Module):
-    """Very basice linear pooling head."""
+    """Very basic linear pooling head."""
 
     def __init__(self, inpt_dim: int, outp_dim: int, nonlin: bool = False) -> None:
         super().__init__()
@@ -175,10 +175,12 @@ class LinearHead(nn.Module):
         self.lin2 = nn.Linear(inpt_dim, outp_dim)
         self.nonlin = nonlin
 
-    def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
+    def forward(self, x: T.Tensor, mask: T.BoolTensor | None = None) -> T.Tensor:
         x = self.lin1(x)
         if self.nonlin:
             x = F.silu(x)
+        if mask is None:
+            return self.lin2(x.mean(dim=1))
         x = x * mask.unsqueeze(-1)
         x = x.sum(dim=1) / mask.sum(dim=1, keepdim=True)
         return self.lin2(x)

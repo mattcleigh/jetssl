@@ -25,23 +25,33 @@ output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/" + project_name + "/"
 
 # Define the settings for the models
 style_sweep = [
-    "mpm-reg-3-noID-BERT-0reg       [reg,probe]       3  bert  0",
-    "mpm-kmeans-3-noID-BERT-0reg    [kmeans,probe]    3  bert  0",
-    "mpm-reg-7-noID-BERT-0reg       [reg,probe]       7  bert  0",
-    "mpm-kmeans-7-noID-BERT-0reg    [kmeans,probe]    7  bert  0",
-    "mpm-reg-7-yesID-BERT-0reg      [reg,id,probe]    7  bert  0",
-    "mpm-kmeans-7-yesID-BERT-0reg   [kmeans,id,probe] 7  bert  0",
-    "mpm-reg-7-yesID-MAE-0reg       [reg,id,probe]    7  mae   0",
-    "mpm-kmeans-7-yesID-MAE-0reg    [kmeans,id,probe] 7  mae   0",
-    "mpm-reg-7-yesID-MAE-8reg       [reg,id,probe]    7  mae   8",
-    "mpm-kmeans-7-yesID-MAE-8reg    [kmeans,id,probe] 7  mae   8",
+    "mpm-reg-3-noID-BERT-0reg       False [reg,probe]       3  bert  0",
+    "mpm-kmeans-3-noID-BERT-0reg    False [kmeans,probe]    3  bert  0",
+    "mpm-reg-7-noID-BERT-0reg       False [reg,probe]       7  bert  0",
+    "mpm-kmeans-7-noID-BERT-0reg    False [kmeans,probe]    7  bert  0",
+    "mpm-reg-7-yesID-BERT-0reg      True  [reg,id,probe]    7  bert  0",
+    "mpm-kmeans-7-yesID-BERT-0reg   True  [kmeans,id,probe] 7  bert  0",
+    "mpm-reg-7-yesID-MAE-0reg       True  [reg,id,probe]    7  mae   0",
+    "mpm-kmeans-7-yesID-MAE-0reg    True  [kmeans,id,probe] 7  mae   0",
+    "mpm-reg-7-yesID-MAE-8reg       True  [reg,id,probe]    7  mae   8",
+    "mpm-kmeans-7-yesID-MAE-8reg    True  [kmeans,id,probe] 7  mae   8",
 ]
 depth_sweep = [f"mae-kmeans-depth{d}  {d}" for d in range(1, 5)]
 mask_sweep = [f"mae-kmeans-mask{m*10:.0f}  {m}" for m in map(lambda x: x/10, range(2, 10))]
-# hlv_sweep = [f"mae-{method}-hlv {method}" for method in ["kmeans", "reg"]]
+weight_sweep = [f"mae-{method}-weight {method}" for method in ["kmeans", "reg"]]
 
 # Get the list of models in all the sweeps
-model_names = [m.split()[0] for s in [style_sweep, depth_sweep, mask_sweep] for m in s]
+model_names = [m.split()[0] for s in [weight_sweep] for m in s]
+
+# Parameters used for ALL rules
+standard_params = (
+    f"project_name={project_name}",
+    "trainer.max_steps=200_000",
+    "model.scheduler.warmup_steps=10_000",
+    "trainer.val_check_interval=20_000",
+    "datamodule.batch_size=500",
+    "n_jets=100_000_000", # All 100M jets
+)
 
 ########################################
 
@@ -58,12 +68,10 @@ rule finetune:
         "scripts/train.py",
         "experiment=train_classifier",
         "network_name=jetclass_{m_name}",
-        f"project_name={project_name}",
         f"model.backbone_path={output_dir}{{m_name}}/backbone.pkl",
-        "trainer.max_steps=200_000",
-        "n_jets=100000000", # All 100M jets
         "callbacks.backbone_finetune.unfreeze_at_step=9999999999",
         lambda w : f"csts_dim={3 if '-3-noID-BERT-0reg' in w.m_name else 7}",
+        *standard_params
     threads: 12
     resources:
         slurm_partition="shared-gpu,private-dpnc-gpu",
@@ -74,7 +82,7 @@ rule finetune:
         "file:hydra_cli"
 
 for model in style_sweep:
-    m_name, tasks, csts_dim, objective, num_registers = model.split()
+    m_name, use_id, tasks, csts_dim, objective, num_registers = model.split()
 
     rule:
         name:
@@ -85,14 +93,12 @@ for model in style_sweep:
             "scripts/train.py",
             "experiment=mpmv1",
             f"network_name={m_name}",
-            f"project_name={project_name}",
             f"+model/tasks={tasks}",
             f"csts_dim={csts_dim}",
             f"model.objective={objective}",
+            f"model.use_id={use_id}",
             f"model.encoder_config.num_registers={num_registers}",
-            "trainer.max_steps=200_000",
-            "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=500",
+            *standard_params
         threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
@@ -114,12 +120,9 @@ for model in depth_sweep:
             "scripts/train.py",
             "experiment=pretrain",
             f"network_name={m_name}",
-            f"project_name={project_name}",
             f"model.decoder_config.num_layers={depth}",
             "+model/tasks=[kmeans,id,probe]",
-            "trainer.max_steps=200_000",
-            "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=500",
+            *standard_params
         threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
@@ -141,12 +144,9 @@ for model in mask_sweep:
             "scripts/train.py",
             "experiment=pretrain",
             f"network_name={m_name}",
-            f"project_name={project_name}",
             f"mask_fraction={mask_fraction}",
             "+model/tasks=[kmeans,id,probe]",
-            "trainer.max_steps=200_000",
-            "model.scheduler.warmup_steps=10_000",
-            "datamodule.batch_size=500",
+            *standard_params
         threads: 12
         resources:
             slurm_partition="shared-gpu,private-dpnc-gpu",
@@ -156,29 +156,26 @@ for model in mask_sweep:
         wrapper:
             "file:hydra_cli"
 
-# for model in hlv_sweep:
-#     m_name, method = model.split()
+for model in weight_sweep:
+    m_name, method = model.split()
 
-#     rule:
-#         name:
-#             f"pretrain_{m_name}"
-#         output:
-#             protected(f"{output_dir}{m_name}/backbone.pkl")
-#         params:
-#             "scripts/train.py",
-#             "experiment=pretrain",
-#             f"network_name={m_name}",
-#             f"project_name={project_name}",
-#             f"+model/tasks=[{method},id,probe]",
-#             f"model.use_hlv=True",
-#             "trainer.max_steps=200_000",
-#             "model.scheduler.warmup_steps=10_000",
-#             "datamodule.batch_size=500",
-#         threads: 12
-#         resources:
-#             slurm_partition="shared-gpu,private-dpnc-gpu",
-#             runtime=12 * 60,  # minutes
-#             slurm_extra="--gres=gpu:ampere:1",
-#             mem_mb=40000,
-#         wrapper:
-#             "file:hydra_cli"
+    rule:
+        name:
+            f"pretrain_{m_name}"
+        output:
+            protected(f"{output_dir}{m_name}/backbone.pkl")
+        params:
+            "scripts/train.py",
+            "experiment=pretrain",
+            f"network_name={m_name}",
+            f"+model/tasks=[{method},id,probe]",
+            "use_weights=True",
+            *standard_params
+        threads: 12
+        resources:
+            slurm_partition="shared-gpu,private-dpnc-gpu",
+            runtime=12 * 60,  # minutes
+            slurm_extra="--gres=gpu:ampere:1",
+            mem_mb=40000,
+        wrapper:
+            "file:hydra_cli"

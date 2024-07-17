@@ -9,5 +9,5 @@ defaults:
   - encoder_config: small.yaml
   - decoder_config: small.yaml
   - optimizer: default.yaml
-  - scheduler: cosine.yaml
+  - scheduler: warmup_decay.yaml
   - _self_
