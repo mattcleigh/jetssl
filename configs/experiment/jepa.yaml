@@ -3,34 +3,27 @@ defaults:
   - override /datamodule: jetclass_masked
   - override /model: jepa
 
-# Datamodule with two masking operations
 datamodule:
   batch_size: 1000 # Can't fit 1k with joint embedder
-  transforms:
-    - _target_: src.datamodules.preprocessing.batch_masking
-      _partial_: true
-      fn:
-        _target_: src.datamodules.masking.random_masking
-        _partial_: true
-        mask_fraction: 0.3
-      key: null_mask
-    - _target_: src.datamodules.preprocessing.batch_masking
-      _partial_: true
-      fn:
-        _target_: src.datamodules.masking.random_masking
-        _partial_: true
-        mask_fraction: 0.3
-      key: target_mask
-    - _target_: src.datamodules.preprocessing.preprocess
-      _partial_: true
-      fn:
-        _target_: joblib.load
-        filename: ${paths.root_dir}/resources/cst_quant.joblib
 
+# For long training
+# trainer:
+  # max_steps: 1000_000
+  # val_check_interval: 50_000
+  # reload_dataloaders_every_n_epochs: 1 # Needed for resuming mid-epoch
+
+# For short training
 trainer:
-  max_steps: 1000_000
-  val_check_interval: 50_000
+  max_steps: 200_000
+  val_check_interval: 20_000
+  reload_dataloaders_every_n_epochs: 1 # Needed for resuming mid-epoch
+
+# Used by other parts of the config
+csts_dim: 7
+mask_fraction: 0.4 # Determined to be the best value for the dataset
 
 # Model modifications
-project_name: jetssl2
+project_name: ablation
 network_name: jepa
+full_resume: False
+

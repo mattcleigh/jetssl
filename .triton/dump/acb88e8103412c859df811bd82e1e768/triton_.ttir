@@ -1,0 +1,27 @@
+module {
+  tt.func public @triton__0d1d23(%arg0: !tt.ptr<f32, 1> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32, 1> {tt.divisibility = 16 : i32}, %arg2: i32, %arg3: i32) attributes {noinline = false} {
+    %c0_i32 = arith.constant 0 : i32
+    %cst = arith.constant dense<0.000000e+00> : tensor<1x2xf32>
+    %cst_0 = arith.constant dense<1.159600e+04> : tensor<1x1xf32>
+    %cst_1 = arith.constant dense<2> : tensor<1x2xi32>
+    %0 = tt.make_range {end = 2 : i32, start = 0 : i32} : tensor<2xi32>
+    %1 = tt.expand_dims %0 {axis = 0 : i32} : (tensor<2xi32>) -> tensor<1x2xi32>
+    %2 = arith.cmpi slt, %1, %cst_1 : tensor<1x2xi32>
+    %3 = tt.splat %arg1 : (!tt.ptr<f32, 1>) -> tensor<1x2x!tt.ptr<f32, 1>>
+    %4 = tt.addptr %3, %1 : tensor<1x2x!tt.ptr<f32, 1>>, tensor<1x2xi32>
+    %5 = tt.load %4, %2, %cst {cache = 1 : i32, evict = 1 : i32, isVolatile = false} : tensor<1x2xf32>
+    %6 = arith.select %2, %5, %cst : tensor<1x2xi1>, tensor<1x2xf32>
+    %7 = "tt.reduce"(%6) <{axis = 1 : i32}> ({
+    ^bb0(%arg4: f32, %arg5: f32):
+      %12 = arith.addf %arg4, %arg5 : f32
+      tt.reduce.return %12 : f32
+    }) : (tensor<1x2xf32>) -> tensor<1xf32>
+    %8 = tt.expand_dims %7 {axis = 1 : i32} : (tensor<1xf32>) -> tensor<1x1xf32>
+    %9 = arith.divf %8, %cst_0 : tensor<1x1xf32>
+    gpu.barrier
+    %10 = tt.addptr %arg0, %c0_i32 : !tt.ptr<f32, 1>, i32
+    %11 = tt.splat %10 : (!tt.ptr<f32, 1>) -> tensor<1x1x!tt.ptr<f32, 1>>
+    tt.store %11, %9 {cache = 1 : i32, evict = 1 : i32} : tensor<1x1xf32>
+    tt.return
+  }
+}

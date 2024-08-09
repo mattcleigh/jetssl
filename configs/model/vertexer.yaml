@@ -9,13 +9,13 @@ vertex_config:
   norm: LayerNorm
 
 loss_fn:
-  _target_: torch.nn.BCEWithLogitsLoss
-  _partial_: true
-  pos_weight: 0.7780
-  # _target_: mltools.mltools.loss.FocalLoss
+  # _target_: torch.nn.BCEWithLogitsLoss
   # _partial_: true
   # pos_weight: 0.7780
-  # gamma: 3.0
+  _target_: mltools.mltools.loss.FocalLoss
+  _partial_: true
+  pos_weight: 0.7780
+  gamma: 3.0
 
 defaults:
   - optimizer: default.yaml

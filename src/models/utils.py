@@ -3,6 +3,8 @@ from copy import deepcopy
 import torch as T
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.init import trunc_normal_
+from torch.nn.utils.parametrizations import weight_norm
 from torchdiffeq import odeint
 
 from mltools.mltools.mlp import MLP
@@ -184,3 +186,109 @@ class LinearHead(nn.Module):
         x = x * mask.unsqueeze(-1)
         x = x.sum(dim=1) / mask.sum(dim=1, keepdim=True)
         return self.lin2(x)
+
+
+class VarCovRegLoss(nn.Module):
+    """Variance-Covariance regularisation loss.
+
+    From the VICReg paper: https://arxiv.org/pdf/2105.04906.pdf
+    """
+
+    def __init__(
+        self,
+        inpt_dim: int,
+        expand_dim: int = 8192,
+        std_weight: float = 1,
+        cov_weight: float = 0.04,  # Paper used ratio of 25:1
+    ) -> None:
+        super().__init__()
+        self.std_weight = std_weight
+        self.cov_weight = cov_weight
+        self.fn = nn.Linear(inpt_dim, expand_dim)
+
+    def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
+        """Calculate the loss."""
+        # Map to the expanded space
+        z = self.fn(x[mask])
+        _N, D = z.shape
+
+        # Calculate the variance loss
+        std = (z.var(dim=0) + 1e-4).sqrt()
+        std_loss = (T.relu(1 - std)).mean()  # Clamp as we only want to penalise low std
+
+        # Calculate the covariance loss
+        cov = T.cov(z.T)
+        cov.diagonal().fill_(0)  # Remove the diagonal
+        cov_loss = cov.square().sum().div(D)
+
+        # Return the weighted sum
+        total = self.std_weight * std_loss + self.cov_weight * cov_loss
+        return total, std_loss, cov_loss
+
+
+class DINOHead(nn.Module):
+    """The projection head for DINO-v2.
+
+    Adapted from:
+    https://github.com/facebookresearch/dinov2/blob/main/dinov2/layers/dino_head.py
+    """
+
+    def __init__(
+        self,
+        inpt_dim: int,
+        outp_dim: int,
+        bottleneck_dim: int = 0,
+    ) -> None:
+        super().__init__()
+        self.mlp = MLP(
+            inpt_dim=inpt_dim,
+            outp_dim=bottleneck_dim or inpt_dim // 4,
+            hddn_dim=bottleneck_dim or inpt_dim // 4,
+            num_blocks=1,
+            act_h="SiLU",
+            act_o="SiLU",
+        )
+        self.apply(self.reset_params)
+        self.last_layer = weight_norm(nn.Linear(self.mlp.outp_dim, outp_dim))
+        self.last_layer.parametrizations.weight.original0.data.fill_(1)
+
+    def reset_params(self, m: nn.Module) -> None:
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x: T.Tensor) -> T.Tensor:
+        x = self.mlp(x)
+        eps = 1e-6 if x.dtype == T.float16 else 1e-12
+        x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
+        return self.last_layer(x)
+
+
+@T.no_grad()
+def sk_center(x: T.Tensor, temp: float) -> T.Tensor:
+    """Apply sinkhorn-Knopp centering, ensures that rows and columns sum to 1."""
+    Q = T.exp(x.float() / temp)
+    B = Q.shape[0]  # batch size
+    K = Q.shape[1]  # number of prototypes / classes / dimension of output
+    Q /= Q.sum()
+    for _ in range(3):
+        Q /= Q.sum(dim=0, keepdim=True)  # Normalize the columns
+        Q /= K
+        Q /= Q.sum(dim=1, keepdim=True)  # Normalize the rows
+        Q /= B
+    Q *= B
+    return Q
+
+
+def dinov2_loss(
+    s_out: T.Tensor,
+    t_out: T.Tensor,
+    s_temp: float = 0.1,
+    t_temp: float = 0.05,
+) -> T.Tensor:
+    t_centered = sk_center(t_out, t_temp)
+    s_lsm = F.log_softmax(s_out / s_temp, dim=-1)
+    loss = -(t_centered * s_lsm).sum(dim=-1)
+    loss = T.nan_to_num(loss, nan=0.0, posinf=0.0, neginf=0.0)
+    return loss.mean()

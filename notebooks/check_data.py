@@ -11,57 +11,26 @@ from torch.utils.data import DataLoader
 
 from mltools.mltools.plotting import plot_multi_hists
 from src.datamodules.hdf import JC_CLASS_TO_LABEL, JetMappable
-from src.datamodules.masking import random_masking
 from src.datamodules.preprocessing import batch_preprocess
-from src.datamodules.transforms import apply_masking
 
 # Define the type of information to load into the dict from the HDF files
 # List containing: key, type, slice
 features = [
-    ("csts", "f", [32]),
-    ("csts_id", "f", [32]),
-    ("mask", "bool", [32]),
+    ("csts", "f", [64]),
+    ("csts_id", "f", [64]),
+    ("mask", "bool", [64]),
     ("labels", "l"),
     ("jets", "f"),
 ]
-
-# Define the preprocessing pipeline
-pipeline = partial(apply_masking, masking_fn=partial(random_masking, mask_fraction=0.5))
-
-# Create the datasets
-sh_data = JetMappable(
-    path="/srv/fast/share/rodem/shlomi",
-    features=features,
-    n_classes=3,
-    processes="training",
-    n_files=1,
-    transforms=pipeline,
-)
-print(len(sh_data))
-sh_labels = ["light", "charm", "bottom"]
-
-# Create the datasets
-bt_data = JetMappable(
-    path="/srv/fast/share/rodem/btag",
-    features=features,
-    n_classes=3,
-    processes="train",
-    n_files=1,
-    transforms=pipeline,
-)
-print(len(bt_data))
-sh_labels = ["light", "charm", "bottom"]
-
-jc_data = JetMappable(
-    path="/srv/fast/share/rodem/JetClassH5/val_5M/",
-    features=features,
-    processes="all",
-    n_classes=10,
-    n_files=1,
-    transforms=pipeline,
-)
-jc_labels = list(JC_CLASS_TO_LABEL.keys())
-cst_features = ["pt", "deta", "dphi", "d0val", "d0err", "dzval", "dzerr"]
+cst_features = [
+    "pt",
+    "deta",
+    "dphi",
+    "d0val",
+    "d0err",
+    "dzval",
+    "dzerr",
+]
 cst_labels = [
     r"$p_\text{T} [GeV]$",
     r"$\Delta\eta$",
@@ -71,6 +40,17 @@ cst_labels = [
     r"$z0$",
     r"$\sigma(z0)$",
 ]
+cst_bins = [
+    np.linspace(0, 800, 25),
+    np.linspace(-1, 1, 25),
+    np.linspace(-1, 1, 25),
+    np.linspace(-1000, 1000, 25),
+    np.linspace(0, 0.8, 25),
+    np.linspace(-1000, 1000, 25),
+    np.linspace(0, 2, 25),
+]
+
+
 jet_features = ["pt", "eta", "phi", "mass", "ncst"]
 jet_labels = [
     "$p_\text{T} [GeV]$",
@@ -80,49 +60,52 @@ jet_labels = [
     r"$N_\text{cst}$",
 ]
 
+# Create the datasets
+bt_data = JetMappable(
+    path="/srv/fast/share/rodem/btag",
+    features=features,
+    n_classes=3,
+    processes="train",
+    n_files=1,
+)
+print(len(bt_data))
+bt_labels = ["light", "charm", "bottom"]
+
+jc_data = JetMappable(
+    path="/srv/fast/share/rodem/JetClassH5/val_5M/",
+    features=features,
+    processes="all",
+    n_classes=10,
+    n_files=1,
+)
+jc_labels = list(JC_CLASS_TO_LABEL.keys())
 
 # Plot distributions of the constituents
 bt_csts = bt_data.data_dict["csts"][bt_data.data_dict["mask"]]
-sh_csts = sh_data.data_dict["csts"][sh_data.data_dict["mask"]]
 jc_csts = jc_data.data_dict["csts"][jc_data.data_dict["mask"]]
 
-# Make the neutral jc impact parameters nans
-is_neut = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]]
-is_neut = (is_neut == 0) | (is_neut == 2)
-jc_csts[is_neut, 3:] = np.nan
+# Make values of eta > 0.8 nans (ignored by plotting)
+jc_csts[np.abs(jc_csts[:, 1]) > 0.795, 1] = np.nan
+
+# Make the neutral jc impact parameters nans (ignored by plotting)
+bt_csts_id = bt_data.data_dict["csts_id"][bt_data.data_dict["mask"]]
+# is_neut = (jc_csts_id == 0) | (jc_csts_id == 2)
+# jc_csts[is_neut, 3:] = np.nan
 
 for i in range(len(cst_features)):
     plot_multi_hists(
-        data_list=[jc_csts[:, i : i + 1], sh_csts[:, i : i + 1], bt_csts[:, i : i + 1]],
+        data_list=[jc_csts[:, i : i + 1], bt_csts[:, i : i + 1]],
         fig_height=4,
-        data_labels=["JetClass", "SVFD", "BTag"],
-        bins=25,
+        data_labels=["JetClass", "BTag"],
+        bins=cst_bins[i],
         logy=True,
         ignore_nans=True,
-        incl_overflow=False,
-        incl_underflow=False,
+        incl_overflow=True,
+        incl_underflow=True,
         col_labels=[cst_labels[i]],
         legend_kwargs={"loc": "upper right"},
+        hist_kwargs=[{"fill": True, "alpha": 0.5}, {"fill": True, "alpha": 0.5}],
         path=root / f"plots/data/{cst_features[i]}.pdf",
-        do_norm=True,
-    )
-
-# Plot the distribution of the jet features
-jc_jets = jc_data.data_dict["jets"]
-sh_jets = sh_data.data_dict["jets"]
-for i in range(len(jet_features)):
-    plot_multi_hists(
-        data_list=[jc_jets[:, i : i + 1], sh_jets[:, i : i + 1]],
-        fig_height=4,
-        data_labels=["JetClass", "SVFD"],
-        bins=25,
-        logy=True,
-        ignore_nans=True,
-        incl_overflow=False,
-        incl_underflow=False,
-        col_labels=[jet_labels[i]],
-        legend_kwargs={"loc": "upper right"},
-        path=root / f"plots/data/jet_{jet_features[i]}.pdf",
         do_norm=True,
     )
 
@@ -138,19 +121,19 @@ def csts_per_class(dataset, labels) -> dict:
     return dict(zip(labels, csts, strict=False))
 
 
-sh_csts = csts_per_class(sh_data, sh_labels)
+# sh_csts = csts_per_class(sh_data, sh_labels)
 jc_csts = csts_per_class(jc_data, jc_labels)
 
 # Plot distributions of the constituents for each class
-plot_multi_hists(
-    data_list=list(sh_csts.values()),
-    data_labels=list(sh_csts.keys()),
-    bins=51,
-    logy=True,
-    col_labels=cst_features,
-    path=root / "plots/data/shlomi.png",
-    do_norm=True,
-)
+# plot_multi_hists(
+#     data_list=list(sh_csts.values()),
+#     data_labels=list(sh_csts.keys()),
+#     bins=51,
+#     logy=True,
+#     col_labels=cst_features,
+#     path=root / "plots/data/shlomi.png",
+#     do_norm=True,
+# )
 
 plot_multi_hists(
     data_list=list(jc_csts.values()),
@@ -173,18 +156,18 @@ id_types = [
     "$\\mu$\n-1",
     "$\\mu$\n+1",
 ]
-sh_csts_id = sh_data.data_dict["csts_id"][sh_data.data_dict["mask"]][..., None]
+bt_csts_id = bt_data.data_dict["csts_id"][bt_data.data_dict["mask"]][..., None]
 jc_csts_id = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]][..., None]
-sh_counts = np.unique(sh_csts_id, return_counts=True)[1].astype("f")
+bt_counts = np.unique(bt_csts_id, return_counts=True)[1].astype("f")
 jc_counts = np.unique(jc_csts_id, return_counts=True)[1].astype("f")
-sh_counts /= sh_counts.sum()
+bt_counts /= bt_counts.sum()
 jc_counts /= jc_counts.sum()
-sh_counts = np.insert(sh_counts, [0, 1], [0, 0])
-counts = {"JetClass": jc_counts, "SVFD": sh_counts}
+bt_counts = np.insert(bt_counts, [0, 1], [0, 0])
+counts = {"JetClass": jc_counts, "BTag": bt_counts}
 x = np.arange(8)
 width = 0.3
 multiplier = -0.5
-fig, ax = plt.subplots(figsize=(6, 4))
+fig, ax = plt.subplots(figsize=(6, 3))
 for attribute, measurement in counts.items():
     offset = width * multiplier
     rects = ax.bar(x + offset, measurement, width, label=attribute)
@@ -199,20 +182,12 @@ plt.close()
 
 
 # Define dataloaders which will apply the preprocessing pipeline
-sh_data.transforms = pipeline
-jc_data.transforms = pipeline
+# sh_data.transforms = pipeline
+# jc_data.transforms = pipeline
 collate_fn = partial(
     batch_preprocess,
     fn=joblib.load(root / "resources/cst_quant.joblib"),
 )
-sh_loader = DataLoader(
-    sh_data,
-    batch_size=10_000,
-    num_workers=0,
-    shuffle=True,
-    collate_fn=collate_fn,
-)
-
 jc_loader = DataLoader(
     jc_data,
     batch_size=10_000,
@@ -222,16 +197,16 @@ jc_loader = DataLoader(
 )
 
 # Plot the first batch
-jc_dict = next(iter(jc_loader))
-sh_dict = next(iter(sh_loader))
-jc_csts = jc_dict["csts"][jc_dict["mask"]]
-sh_csts = sh_dict["csts"][sh_dict["mask"]]
-plot_multi_hists(
-    data_list=[jc_csts, sh_csts],
-    bins=51,
-    logy=True,
-    data_labels=["JetClass", "Shlomi"],
-    col_labels=cst_features,
-    path=root / "plots/data/batch.png",
-    do_norm=True,
-)
+# jc_dict = next(iter(jc_loader))
+# sh_dict = next(iter(sh_loader))
+# jc_csts = jc_dict["csts"][jc_dict["mask"]]
+# sh_csts = sh_dict["csts"][sh_dict["mask"]]
+# plot_multi_hists(
+#     data_list=[jc_csts, sh_csts],
+#     bins=51,
+#     logy=True,
+#     data_labels=["JetClass", "Shlomi"],
+#     col_labels=cst_features,
+#     path=root / "plots/data/batch.png",
+#     do_norm=True,
+# )

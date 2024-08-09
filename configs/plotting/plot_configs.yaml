@@ -1,0 +1,112 @@
+
+jetclass_finetune:
+  x_name: n_samples
+  y_name: accuracy
+  x_label: number of training samples
+  y_label: accuracy
+  log_x: true
+  show_grid: true
+  figsize: [4, 4.2]
+  x_lim: [500, 2.0e+8]
+  y_lim: [20, 100]
+  inset_bounds: [0.05, 0.9, 0.8, 0.23]
+  inset_loc: [5.0e+5, 1.5e+8, 83, 86]
+  legend_kwargs: {loc: lower right, ncol: 1}
+
+
+jetclass_frozen:
+  x_name: n_samples
+  y_name: accuracy
+  x_label: number of training samples
+  y_label: accuracy (%)
+  log_x: true
+  show_grid: true
+  figsize: [4, 4.2]
+  x_lim: [500, 2.0e+8]
+  y_lim: [20, 100]
+  inset_bounds: [0.05, 0.9, 0.8, 0.23]
+  inset_loc: [5.0e+5, 1.5e+8, 82.5, 84.5]
+  legend_kwargs: {loc: lower right, ncol: 1}
+
+btag_frozen:
+  x_name: n_samples
+  y_name: accuracy
+  x_label: number of training samples
+  y_label: accuracy (%)
+  log_x: true
+  show_grid: true
+  figsize: [4, 4]
+  y_lim: [53, 71]
+  legend_kwargs: {loc: lower right}
+
+btag_finetune:
+  x_name: n_samples
+  y_name: accuracy
+  x_label: number of training samples
+  y_label: accuracy (%)
+  log_x: true
+  show_grid: true
+  figsize: [4, 4]
+  y_lim: [53, 71]
+  legend_kwargs: {loc: lower right}
+
+
+vtx_frozen_ari:
+  x_name: n_vtx
+  y_name: ari
+  x_label: secondary vertices per jet
+  y_label: ARI
+  show_grid: true
+  figsize: [4, 4]
+  y_lim: [0.2, 0.6]
+  legend_kwargs: {ncol: 2}
+
+vtx_finetune_ari:
+  x_name: n_vtx
+  y_name: ari
+  x_label: secondary vertices per jet
+  y_label: balanced accuracy (%)
+  show_grid: true
+  figsize: [4, 4]
+  y_lim: [0.40, 0.65]
+  legend_kwargs: {ncol: 2}
+
+trk_frozen:
+  x_name: n_trk
+  y_name: acc
+  x_label: number of tracks per jet
+  y_label: balanced accuracy (%)
+  show_grid: true
+  figsize: [4, 4]
+  y_lim: [59, 70]
+  legend_kwargs: {ncol: 2}
+
+trk_finetune:
+  x_name: n_trk
+  y_name: acc
+  x_label: number of tracks per jet
+  y_label: balanced accuracy (%)
+  y_lim: [71, 74.5]
+  show_grid: true
+  figsize: [4, 4]
+  legend_kwargs: {ncol: 2}
+
+cwola_frozen:
+  x_name: n_samples
+  y_name: sic
+  x_label: number of signal samples
+  y_label: significance improvement
+  show_grid: true
+  log_x: true
+  figsize: [4, 4]
+  y_lim: [0, 10]
+
+cwola_finetune:
+  x_name: n_samples
+  y_name: sic
+  x_label: number of signal samples
+  y_label: significance improvement
+  show_grid: true
+  log_x: true
+  figsize: [4, 4]
+  y_lim: [0, 10]

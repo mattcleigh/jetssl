@@ -19,23 +19,23 @@ container: config["container_path"]
 ########################################
 
 # Define important paths
-debug_mode = True
-fix_backbone = True
+debug_mode = False
+fix_backbone = False
 project_name = "jetssl_fixed_frozen" if fix_backbone else "jetssl_fixed_finetune"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
 backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0, 1, 2]
+seeds = [0, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
 model_names = [
+    "kmeans",
     "reg",
     "diff",
     "flow",
     "vae",
-    "kmeans",
     "mdm",
     "untrained",
     "nobackbone",
@@ -225,11 +225,12 @@ for dt in downstream_tasks:
                         f"model.backbone_path={backbones}{m}/backbone.pkl",
                         f"n_jets={nj}",
                         f"seed={s}",
+                        "full_resume=True",
                         ft_rules,
                     threads: 8
                     resources:
                         slurm_partition="shared-gpu,private-dpnc-gpu",
-                        runtime=6 * 60,  # minutes
+                        runtime=12 * 60,  # minutes
                         slurm_extra="--gres=gpu:ampere:1",
                         mem_mb=20000,
                     wrapper:

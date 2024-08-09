@@ -1,0 +1,12 @@
+_target_: src.models.classifier.TokenisedClassifier
+
+token_type: kmeans
+kmeans_path: ${paths.root_dir}/resources/kmeans_7.pkl
+vae_path: ${paths.root_dir}/resources/vqvae.pkl
+
+defaults:
+  - encoder_config: tiny.yaml
+  - class_head: ca.yaml
+  - optimizer: default.yaml
+  - scheduler: cosine.yaml
+  - _self_

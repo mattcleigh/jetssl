@@ -99,13 +99,13 @@ class DINOHead(nn.Module):
         bottleneck_dim: int = 0,
     ) -> None:
         super().__init__()
-        bottleneck_dim or inpt_dim // 2
         self.mlp = MLP(
             inpt_dim=inpt_dim,
             outp_dim=bottleneck_dim or inpt_dim // 2,
-            hddn_dim=inpt_dim,
-            num_blocks=2,
+            hddn_dim=bottleneck_dim or inpt_dim // 2,
+            num_blocks=1,
             act_h="SiLU",
+            act_o="SiLU",
         )
         self.apply(self.reset_params)
         self.last_layer = weight_norm(nn.Linear(self.mlp.outp_dim, outp_dim))
@@ -133,7 +133,7 @@ def koleo_loss(x: T.Tensor, eps: float = 1e-8) -> T.Tensor:
     # Normalize the input
     x = normalize(x, eps=eps, dim=-1)
 
-    # Calculate the matching pair idxes via the max inner produce
+    # Calculate the matching pair idxes via the max inner product
     with T.no_grad():
         dots = T.mm(x, x.t())
         dots.view(-1)[:: (x.shape[0] + 1)].fill_(-1)  # Fill the diagonal with -1

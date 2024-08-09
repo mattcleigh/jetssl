@@ -1,10 +1,10 @@
 dim: 128
-num_layers: 4
+num_layers: 0
 do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for encoder!
 num_registers: 8
-do_final_norm: True
+do_final_norm: False
 layer_config:
   num_heads: 4
   ff_mult: 2

@@ -10,115 +10,10 @@ from torch.nn.functional import (
 )
 from torchmetrics import Accuracy
 
-from mltools.mltools.lightning_utils import simple_optim_sched
-from mltools.mltools.torch_utils import ema_param_sync
+from mltools.mltools.lightning_utils import get_max_steps, simple_optim_sched
+from mltools.mltools.torch_utils import ema_param_sync, occupancy
 from mltools.mltools.transformers import Transformer
-from src.models.utils import JetEncoder
-
-
-class VarCovRegLoss(nn.Module):
-    """Variance-Covariance regularisation loss.
-
-    From the VICReg paper: https://arxiv.org/pdf/2105.04906.pdf
-    """
-
-    def __init__(
-        self,
-        inpt_dim: int,
-        expand_dim: int = 8192,
-        std_weight: float = 1,
-        cov_weight: float = 0.04,  # Paper used ratio of 25:1
-    ) -> None:
-        super().__init__()
-        self.std_weight = std_weight
-        self.cov_weight = cov_weight
-        self.fn = nn.Linear(inpt_dim, expand_dim)
-
-    def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
-        """Calculate the loss."""
-        # Map to the expanded space
-        z = self.fn(x[mask])
-        _N, D = z.shape
-
-        # Calculate the variance loss
-        std = (z.var(dim=0) + 1e-4).sqrt()
-        std_loss = (T.relu(1 - std)).mean()  # Clamp as we only want to penalise low std
-
-        # Calculate the covariance loss
-        cov = T.cov(z.T)
-        cov.diagonal().fill_(0)  # Remove the diagonal
-        cov_loss = cov.square().sum().div(D)
-
-        # Return the weighted sum
-        total = self.std_weight * std_loss + self.cov_weight * cov_loss
-        return total, std_loss, cov_loss
-
-
-class JEPAPredictor(nn.Module):
-    """Predictor for the JEPA model."""
-
-    def __init__(self, inpt_dim: int, **kwargs) -> None:
-        super().__init__()
-
-        # The transformer encoder for the constituents
-        self.encoder = Transformer(**kwargs)
-        self.dim = self.encoder.dim
-
-        # The input and output projection layers
-        self.input_proj = nn.Linear(inpt_dim, self.dim)
-        self.output_proj = nn.Linear(self.dim, inpt_dim)
-
-        # The tokens for the targets and positional encoding
-        self.target_token = nn.Parameter(T.randn((1, 1, self.dim)) * 1e-3)
-        self.pos_embed = nn.Parameter(T.randn((1, 150, self.dim)) * 1e-3)
-
-    def forward(
-        self,
-        x: T.Tensor,
-        s_mask: T.BoolTensor,
-        target_mask: T.BoolTensor,
-    ) -> T.Tensor:
-        """Pass through the predictor.
-
-        Parameters
-        ----------
-        x : T.Tensor
-            The embedded jet constituents. The output of the student encoder.
-            May contain cls tokens and registers.
-        s_mask : T.BoolTensor
-            The mask from the student output. Which nodes were seen by the student.
-            May contain space for cls tokens and registers.
-        target_mask : T.BoolTensor
-            The mask for the target. Which of the teacher's nodes are we trying to
-            predict.
-        """
-        # Get the shapes of the inputs
-        B, S = target_mask.shape
-        R = x.shape[1] - S
-
-        # Embed the nodes into the predictor space
-        x = self.input_proj(x)
-
-        # Add the positional encoding to the x tokens
-        x = x + self.pos_embed[:, : S + R]
-
-        # Create the target tokens, which just token + embed in the shape of x
-        targ_tokens = (
-            self.target_token.expand(B, 1, self.dim) + self.pos_embed[:, R : R + S]
-        )
-
-        # Concat the target tokens to the FRONT of x
-        x = T.cat([targ_tokens, x], dim=1)
-        mask = T.cat([target_mask, s_mask], dim=1)
-
-        # Pass through the transformer
-        x = self.encoder(x, mask=mask)
-
-        # We only need the outputs of the target nodes
-        x = x[:, :S][target_mask]
-
-        # Project back to the original space
-        return self.output_proj(x)
+from src.models.utils import DINOHead, JetEncoder, dinov2_loss
 
 
 class JetJEPA(pl.LightningModule):
@@ -130,13 +25,15 @@ class JetJEPA(pl.LightningModule):
         data_sample: tuple,
         n_classes: int,
         encoder_config: dict,
-        predictor_config: dict,
+        decoder_config: dict,
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
         backbone_path: str | None = None,
-        ema_start: float = 0.996,
-        ema_steps: int = 1000_000,
+        ema_start: float = 0.992,
+        do_cls_loss: bool = False,
+        do_dino: bool = False,
+        dino_dim: int = 4096,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -145,25 +42,37 @@ class JetJEPA(pl.LightningModule):
         self.num_csts = data_sample["csts"].shape[0]
         self.csts_dim = data_sample["csts"].shape[-1]
         self.ema_start = ema_start
-        self.ema_steps = ema_steps
+        self.do_cls_loss = do_cls_loss
+        self.do_dino = do_dino
+        self.dino_dim = dino_dim
 
-        # The student and teacher models
+        # The student (online) model, support loading from a backbone
         self.student = (
             T.load(backbone_path)
             if backbone_path is not None
             else JetEncoder(csts_dim=self.csts_dim, encoder_config=encoder_config)
         )
-        self.teacher = deepcopy(self.student)  # Official code uses a copy
-        self.teacher.requires_grad_(False)  # Teacher is an EMA of student
 
-        # Save the embedding dimension
+        # The teacher (ema) model, official code is a copy not a reinit
+        self.teacher = deepcopy(self.student)
+        self.teacher.requires_grad_(False)  # No direct optimisation
+
+        # The predictor (decoder) for mapping between the student and teacher spaces
+        self.decoder = Transformer(**decoder_config)
+
+        # The linear layers for mapping between the encoder and predictor spaces
         self.outp_dim = self.student.outp_dim
+        self.enc_to_dec = nn.Linear(self.outp_dim, self.decoder.dim)
+        self.dec_to_enc = nn.Linear(self.decoder.dim, self.outp_dim)
 
-        # The predictor for mapping between the student and teacher spaces
-        self.predictor = JEPAPredictor(self.outp_dim, **predictor_config)
+        # The learnable parameters for the dropped nodes in the predictor (1 per seq)
+        self.null_token = nn.Parameter(T.randn((self.num_csts, self.decoder.dim)))
 
-        # Regularisation loss for the predictor to prevent collapse
-        self.reg_loss = VarCovRegLoss(self.outp_dim)
+        # If we are using the DINO, we need to create the heads
+        if do_dino:
+            self.student_head = DINOHead(self.outp_dim, outp_dim=dino_dim)
+            self.teacher_head = deepcopy(self.student_head)
+            self.teacher_head.requires_grad_(False)
 
         # Basic classifier and accuracy for evaluating encoder
         self.class_head = class_head(inpt_dim=self.outp_dim, outp_dim=n_classes)
@@ -178,31 +87,57 @@ class JetJEPA(pl.LightningModule):
         labels = sample["labels"]
         mask = sample["mask"]
         null_mask = sample["null_mask"]
-        target_mask = sample["target_mask"]
 
-        # Make sure that the target mask is a subset of the null mask
-        # (dont predict it if it wasnt hidden in the first place)
-        target_mask[~null_mask] = False
-
-        # Pass the inputs through the student model, masking some nodes
+        # Pass the inputs through the student model, dropping some nodes
         _B, S, _D = csts.shape
-        s_out, s_mask = self.student(csts, csts_id, mask & ~null_mask)
+        s_out, _s_mask = self.student(csts, csts_id, mask & ~null_mask)
 
         # Pass the inputs through the teacher model, without the null mask
         with T.no_grad():
             t_out, t_mask = self.teacher(csts, csts_id, mask)
-            target = t_out[:, -S:]  # Strip the cls/register tokens
-            target = target[target_mask]  # Only care about the target nodes
+            target = t_out[:, -S:][mask]  # Strip registers and unmask
 
-        # Pass the student outputs through the predictor
-        p_out = self.predictor(s_out, s_mask, target_mask)
+        # Resize to the predictor space and store the number of registers
+        dec_inpts = self.enc_to_dec(s_out)
 
-        # Calculate the prediction losses for the target mask and log
-        # Official JEPA code uses smooth_l1_loss over mse
-        pred_loss = smooth_l1_loss(p_out, target)
+        # Trim the null tokens to seq_len and expand to match batch size
+        nt = self.null_token[: null_mask.size(1)]
+        nt = nt.unsqueeze(0).expand(*null_mask.shape, -1)
 
-        # Calculate the regularisation loss for the predictor
-        reg_loss, std_loss, cov_loss = self.reg_loss(s_out, s_mask)
+        # Create array which allows us to index the null_mask in order per jet
+        null_sorted = T.arange(null_mask.size(1), device=self.device)
+        null_sorted = null_sorted.unsqueeze(0).expand_as(null_mask)
+        null_sorted = null_sorted < null_mask.sum(dim=1, keepdim=True)
+
+        # Insert the null tokens so they are ordered wrt each other
+        dec_inpts[:, -S:][null_mask] = nt[null_sorted].type(dec_inpts.dtype)
+
+        # Pass through the predictor, we dont need registers after
+        p_out = self.decoder(dec_inpts, mask=t_mask)
+        p_out = p_out[:, -S:][mask]  # Strip registers and unmask
+        p_out = self.dec_to_enc(p_out)
+
+        # Calculate the prediction losses
+        if self.do_dino:
+            p_out = self.student_head(p_out)
+            target = self.teacher_head(target)
+            pred_loss = dinov2_loss(p_out, target)
+            self.log(f"{prefix}/x_occ", occupancy(target))
+        else:
+            pred_loss = smooth_l1_loss(p_out, target)  # paper=mse, official code=sl1
+        self.log(f"{prefix}/pred_loss", pred_loss)
+
+        # Inlcude loss from the cls token (first register token)
+        cls_loss = 0
+        if self.do_cls_loss:
+            if self.do_dino:
+                s_cls = self.student_head(s_out[:, 0])
+                t_cls = self.teacher_head(t_out[:, 0])
+                cls_loss = dinov2_loss(s_cls, t_cls)
+                self.log(f"{prefix}/cls_occ", occupancy(t_cls))
+            else:
+                cls_loss = smooth_l1_loss(s_out[:, 0], t_out[:, 0])
+            self.log(f"{prefix}/cls_loss", cls_loss)
 
         # Run the probe to evaluate the embedding using the teacher's output
         # In MPM we typically do it every 50 batches.
@@ -215,19 +150,15 @@ class JetJEPA(pl.LightningModule):
             self.log(f"{prefix}/probe_accuracy", acc)
             self.log(f"{prefix}/probe_loss", probe_loss)
 
-        # Combine and log the losses
-        total_loss = pred_loss + reg_loss + probe_loss
+        # Combine the losses
+        total_loss = pred_loss + cls_loss + probe_loss
         self.log(f"{prefix}/total_loss", total_loss)
-        self.log(f"{prefix}/pred_loss", pred_loss)
-        self.log(f"{prefix}/std_loss", std_loss)
-        self.log(f"{prefix}/cov_loss", cov_loss)
         return total_loss
 
     def training_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
-        # Perform the ema for the teacher network
-        ema = self.ema_scheduler(self.trainer.global_step)
-        ema_param_sync(self.student, self.teacher, ema)
-
+        ema_param_sync(self.student, self.teacher, self.get_ema())
+        if self.do_dino:
+            ema_param_sync(self.student_head, self.teacher_head, self.get_ema())
         return self._shared_step(sample, batch_idx, "train")
 
     def validation_step(self, sample: tuple, batch_idx: int) -> T.Tensor:
@@ -235,6 +166,7 @@ class JetJEPA(pl.LightningModule):
 
     def configure_optimizers(self) -> dict:
         """Use the mltools optimiser and scheduler."""
+        self.max_steps = get_max_steps(self)
         return simple_optim_sched(self)
 
     def on_validation_epoch_end(self) -> None:
@@ -242,6 +174,7 @@ class JetJEPA(pl.LightningModule):
         self.teacher.eval()
         T.save(self.teacher, "backbone.pkl")
 
-    def ema_scheduler(self, step: int) -> None:
+    def get_ema(self) -> None:
         """Method to calculate the EMA decay for the teacher network."""
-        return min(1, self.ema_start + step * (1 - self.ema_start) / self.ema_steps)
+        step = self.trainer.global_step
+        return min(1, self.ema_start + step * (1 - self.ema_start) / self.max_steps)

@@ -9,6 +9,7 @@ from torchmetrics import Accuracy
 
 from mltools.mltools.lightning_utils import simple_optim_sched
 from mltools.mltools.loss import bce_with_label_smoothing
+from mltools.mltools.transformers import Transformer
 
 if TYPE_CHECKING:
     from src.models.utils import JetBackbone
@@ -225,3 +226,122 @@ class CWoLaClassifier(Classifier):
         self.log(f"{prefix}/acc", acc)
 
         return loss
+
+
+class TokenisedClassifier(LightningModule):
+    """Classifier with an optional tokenisation module at the front."""
+
+    def __init__(
+        self,
+        *,
+        data_sample: dict,
+        n_classes: int,
+        encoder_config: dict,
+        class_head: partial,
+        optimizer: partial,
+        scheduler: dict,
+        token_type: str,
+        kmeans_path: str,
+        vae_path: str,
+    ) -> None:
+        """Initialise the model."""
+        super().__init__()
+        self.save_hyperparameters(logger=False)
+        assert token_type in {"kmeans", "vae", "none"}
+
+        # Break down the data sample into the dimensions needed for the model
+        self.num_csts = data_sample["csts"].shape[0]
+        self.csts_dim = data_sample["csts"].shape[-1]
+        self.n_classes = n_classes
+        self.token_type = token_type
+
+        # Load clustering model
+        if token_type == "kmeans":
+            self.kmeans = T.load(kmeans_path, map_location="cpu")
+            self.num_clusters = self.kmeans.centroids.shape[1]
+        elif token_type == "vae":
+            self.vae = T.load(vae_path, map_location="cpu")
+            self.vae.requires_grad_(False)
+            self.vae.eval()
+            self.num_clusters = self.vae.quantizer.codebook_size
+
+        # The transformer encoder
+        self.encoder = Transformer(**encoder_config)
+
+        # The embedders (we use a linear layer if using the raw continuous data)
+        if self.token_type == "none":
+            self.csts_emb = nn.Linear(self.csts_dim, self.encoder.dim)
+        else:
+            self.csts_emb = nn.Embedding(self.num_clusters, self.encoder.dim)
+        self.csts_id_emb = nn.Embedding(CSTS_ID, self.encoder.dim)
+
+        # The classifier head
+        self.class_head = class_head(
+            inpt_dim=self.encoder.outp_dim,
+            outp_dim=n_classes if n_classes > 2 else 1,
+        )
+
+        # Accuracy tracking for loggers
+        self.train_acc = Accuracy("multiclass", num_classes=n_classes)
+        self.valid_acc = Accuracy("multiclass", num_classes=n_classes)
+
+    def forward(self, csts: T.Tensor, csts_id: T.Tensor, mask: T.Tensor) -> T.Tensor:
+        # Apply the tokenisation if needed
+        if self.token_type != "none":
+            if self.token_type == "kmeans":
+                tokens = self.kmeans.predict(csts[mask].T.contiguous()).long()
+            elif self.token_type == "vae":
+                tokens = self.vae(csts, mask=mask)[0].long()
+            csts = T.zeros_like(mask, dtype=T.long)
+            csts[mask] = tokens
+
+        # Initial embedding
+        x = self.csts_emb(csts) + self.csts_id_emb(csts_id)
+
+        # Pass through the network
+        x = self.encoder(x, mask=mask)
+        mask = self.encoder.get_combined_mask(mask)
+        return self.class_head(x, mask=mask)
+
+    def _shared_step(self, data: dict, batch_idx: int, prefix: str) -> T.Tensor:
+        """Shared step used in both training and validaiton."""
+        csts = data["csts"]
+        csts_id = data["csts_id"]
+        mask = data["mask"]
+        labels = data["labels"]
+
+        # Get the encoded output
+        # Pass through the backbone and head
+        output = self.forward(csts, csts_id, mask)
+
+        # Get the loss either by cross entropy or logistic regression
+        if self.n_classes > 2:
+            loss = cross_entropy(output, labels, label_smoothing=0.1)
+        else:
+            target = labels.float().view_as(output)
+            loss = bce_with_label_smoothing(output, target)
+            output = T.sigmoid(output)  # For the accuracy metric
+
+        # Update the accuracy
+        acc = getattr(self, f"{prefix}_acc")
+        acc(output, labels)
+
+        # Log
+        self.log(f"{prefix}/total_loss", loss)
+        self.log(f"{prefix}/acc", acc)
+
+        return loss
+
+    def training_step(self, data: dict, batch_idx: int) -> T.Tensor:
+        return self._shared_step(data, batch_idx, "train")
+
+    def validation_step(self, data: dict, batch_idx: int) -> T.Tensor:
+        return self._shared_step(data, batch_idx, "valid")
+
+    def predict_step(self, data: dict, batch_idx: int) -> dict:
+        output = self.forward(data["csts"], data["csts_id"], data["mask"])
+        return {"output": output, "label": data["labels"].unsqueeze(-1)}
+
+    def configure_optimizers(self) -> dict:
+        """Use the mltools optimiser and scheduler."""
+        return simple_optim_sched(self)
