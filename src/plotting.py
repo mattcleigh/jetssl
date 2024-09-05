@@ -46,7 +46,7 @@ _LABELS = {
     "flow": "Flow",
     "vae": "VQVAE",
     "kmeans": "K-Means",
-    "mdm": "Full-Diffusion",
+    "mdm": "SDM",
 }
 
 
@@ -258,7 +258,7 @@ def plot_metric(
             axins.set_yscale("log")
         axins.grid(True, which="major", ls="--", alpha=0.5)
         axins.set_xticklabels([])
-        axins.get_yaxis().set_visible(False)
+        # axins.get_yaxis().set_visible(False)
 
     # Cycle through the models
     m_names = sorted(model_list, key=_ORDER.index)
@@ -332,7 +332,7 @@ def plot_metric(
         ax0.grid(True, which="major", ls="--", alpha=0.5)
         ax1.grid(True, which="major", ls="--", alpha=0.5)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.05)
+    fig.subplots_adjust(hspace=0.05, top=0.75)
 
     # Make the directory and save the plot
     Path(path).parent.mkdir(parents=True, exist_ok=True)

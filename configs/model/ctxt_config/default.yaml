@@ -1,0 +1,6 @@
+num_blocks: 1
+act_h: SiLU
+act_o: SiLU
+hddn_dim: 256
+outp_dim: 32
+norm: LayerNorm

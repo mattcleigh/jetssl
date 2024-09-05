@@ -65,6 +65,37 @@ def random_masking(
     return null_mask
 
 
+def random_uniform_masking(
+    csts: np.ndarray,
+    mask: np.ndarray,
+    frac_min: float = 0.05,
+    frac_max: float = 1.0,
+    seed: int | None = None,
+) -> np.ndarray:
+    """Randomly drop a fraction of the jet based on the total number of constituents."""
+    # Create the random number generator, the number to drop and the mask
+    rng = np.random.default_rng(seed)
+    min_drop = np.ceil(frac_min * mask.sum()).astype(int)
+    max_drop = np.floor(frac_max * mask.sum()).astype(int)
+    num_drop = rng.integers(min_drop, max_drop, endpoint=True)  # Must be inclusive
+
+    # Exit now if we are not dropping any nodes
+    null_mask = np.full_like(mask, False)
+    if num_drop == 0:
+        return null_mask
+
+    # Generate a random number per node, the lowest frac will be killed
+    rand = rng.uniform(size=len(mask))
+    rand[~mask] = 9999  # Padded nodes shouldnt be dropped
+
+    # Get the indices for which to sort the random values
+    drop_idx = np.argsort(rand)[:num_drop]
+
+    # Create the null mask by dropping the nodes
+    null_mask[drop_idx] = True
+    return null_mask
+
+
 def knn_masking(
     csts: np.ndarray,
     mask: np.ndarray,

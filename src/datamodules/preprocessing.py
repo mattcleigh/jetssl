@@ -8,7 +8,10 @@ from torch.utils.data.dataloader import default_collate
 
 
 def preprocess(
-    jet_dict: dict[np.ndarray], fn: BaseEstimator, hlv_fn: BaseEstimator | None = None
+    jet_dict: dict[np.ndarray],
+    fn: BaseEstimator,
+    hlv_fn: BaseEstimator | None = None,
+    get_ratios: bool = False,
 ) -> dict:
     """Preprocess a jet dict using a sklearn transformer.
 
@@ -20,6 +23,27 @@ def preprocess(
     # Load the constituents
     csts = jet_dict["csts"]
     mask = jet_dict["mask"]
+    is_batched = mask.ndim == 2
+
+    # Get the mask ratios BEFORE any preprocessing
+    if get_ratios:
+        # If no mask is present, then the ratios are simply zeros
+        if "null_mask" not in jet_dict:
+            if is_batched:
+                ratio = np.zeros((csts.shape[0], 2), dtype=np.float32)
+            else:
+                ratio = np.zeros(2, dtype=np.float32)
+        else:
+            jets = jet_dict["jets"]
+            null_mask = jet_dict["null_mask"]
+
+            mask_ratio = null_mask.sum(-1) / mask.sum(-1)
+            csts_pt = csts[..., 0]
+            pt_masked = (csts_pt * null_mask).sum(-1)
+            pt_total = (csts_pt * mask).sum(-1)
+            pt_ratio = pt_masked / pt_total
+            ratio = np.stack((mask_ratio, pt_ratio), dtype=np.float32, axis=-1)
+        jet_dict["jets"] = ratio
 
     # Check if the number of features is the same, else pad
     if (feat_diff := fn.n_features_in_ - csts.shape[-1]) > 0:
@@ -46,7 +70,7 @@ def preprocess(
     jet_dict["csts"] = csts
 
     # If there is a hlvs function, apply it
-    if hlv_fn is not None:
+    if hlv_fn is not None and not get_ratios:
         jets = jet_dict["jets"]
         if exp_jets := (jets.ndim == 1):  # Must work on batched and single jets
             jets = jets[None, ...]
@@ -59,7 +83,10 @@ def preprocess(
 
 
 def batch_preprocess(
-    batch: list[T.Tensor], fn: BaseEstimator, hlv_fn: BaseEstimator | None = None
+    batch: list[T.Tensor],
+    fn: BaseEstimator,
+    hlv_fn: BaseEstimator | None = None,
+    get_ratios: bool = False,
 ) -> dict:
     """Preprocess the entire batch of jets.
 
@@ -97,6 +124,8 @@ def batch_preprocess(
     if hlv_fn is not None:
         jets = jet_dict["jets"]
         jet_dict["jets"] = T.from_numpy(hlv_fn.transform(jets)).float()
+    elif get_ratios:
+        print("I havent implemented this yet!")
     return jet_dict
 
 

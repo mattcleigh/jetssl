@@ -16,6 +16,7 @@ model:
 trainer:
   max_epochs: null
   max_steps: 200_001 # One full epoch as 1e8 jets / 500 batch size + epsilon
+  val_check_interval: 20_000
 
 # Key parameters for fine-tuning
 n_jets: 1000_000

@@ -30,14 +30,14 @@ class JetBackbone(nn.Module):
         csts_emb: nn.Module,
         csts_id_emb: nn.Module | None,
         encoder: nn.Module,
-        jets_emb: nn.Module | None = None,
+        ctxt_emb: nn.Module | None = None,
         is_causal: bool = False,
     ) -> None:
         super().__init__()
         self.csts_emb = csts_emb
         self.csts_id_emb = csts_id_emb
         self.encoder = encoder
-        self.jet_emb = jets_emb
+        self.ctxt_emb = ctxt_emb
         self.is_causal = is_causal
 
     @property
@@ -62,8 +62,8 @@ class JetBackbone(nn.Module):
 
         # Need the hasattr check as the older pickled models dont have this
         ctxt = (
-            self.jet_emb(jets)
-            if hasattr(self, "jet_emb") and self.jet_emb is not None
+            self.ctxt_emb(jets)
+            if hasattr(self, "ctxt_emb") and self.ctxt_emb is not None
             else None
         )
         x = self.encoder(x, mask=mask, ctxt=ctxt, causal=self.is_causal)
@@ -83,15 +83,19 @@ class JetEncoder(JetBackbone):
         csts_dim: int,
         encoder_config: dict,
         use_csts_id: bool = True,
-        use_hlv: bool = False,
         is_causal: bool = False,
+        ctxt_dim: int = 0,
+        ctxt_config: dict | None = None,
     ) -> None:
-        cemb_dim = 64 if use_hlv else 0
-        encoder = Transformer(**encoder_config, ctxt_dim=cemb_dim)
+        if ctxt_dim:
+            ctxt_emb = MLP(ctxt_dim, **(ctxt_config or {}))
+            ctxt_dim = ctxt_emb.outp_dim
+        else:
+            ctxt_emb = None
+        encoder = Transformer(**encoder_config, ctxt_dim=ctxt_dim)
         csts_emb = nn.Linear(csts_dim, encoder.dim)
         csts_id_emb = nn.Embedding(CSTS_ID, encoder.dim) if use_csts_id else None
-        jets_emb = nn.Linear(self.ctxt_dim, cemb_dim) if use_hlv else None
-        super().__init__(csts_emb, csts_id_emb, encoder, jets_emb, is_causal)
+        super().__init__(csts_emb, csts_id_emb, encoder, ctxt_emb, is_causal)
 
 
 class VectorDiffuser(nn.Module):
@@ -188,42 +192,30 @@ class LinearHead(nn.Module):
         return self.lin2(x)
 
 
-class VarCovRegLoss(nn.Module):
+def varcov_loss(
+    x: T.Tensor,
+    std_weight: float = 1,
+    cov_weight: float = 0.01,
+) -> tuple:
     """Variance-Covariance regularisation loss.
 
     From the VICReg paper: https://arxiv.org/pdf/2105.04906.pdf
+    We also use the default weights from the paper when they applied it to BYOL
     """
+    _N, D = x.shape
 
-    def __init__(
-        self,
-        inpt_dim: int,
-        expand_dim: int = 8192,
-        std_weight: float = 1,
-        cov_weight: float = 0.04,  # Paper used ratio of 25:1
-    ) -> None:
-        super().__init__()
-        self.std_weight = std_weight
-        self.cov_weight = cov_weight
-        self.fn = nn.Linear(inpt_dim, expand_dim)
+    # Calculate the variance loss
+    std = (x.var(dim=0) + 1e-4).sqrt()
+    std_loss = (T.relu(1 - std)).mean()  # Clamp as we only want to penalise low std
 
-    def forward(self, x: T.Tensor, mask: T.BoolTensor) -> T.Tensor:
-        """Calculate the loss."""
-        # Map to the expanded space
-        z = self.fn(x[mask])
-        _N, D = z.shape
+    # Calculate the covariance loss
+    cov = T.cov(x.T)
+    cov.diagonal().fill_(0)
+    cov_loss = cov.square().sum().div(D)
 
-        # Calculate the variance loss
-        std = (z.var(dim=0) + 1e-4).sqrt()
-        std_loss = (T.relu(1 - std)).mean()  # Clamp as we only want to penalise low std
-
-        # Calculate the covariance loss
-        cov = T.cov(z.T)
-        cov.diagonal().fill_(0)  # Remove the diagonal
-        cov_loss = cov.square().sum().div(D)
-
-        # Return the weighted sum
-        total = self.std_weight * std_loss + self.cov_weight * cov_loss
-        return total, std_loss, cov_loss
+    # Return the weighted sum
+    total = std_weight * std_loss + cov_weight * cov_loss
+    return total, std_loss, cov_loss
 
 
 class DINOHead(nn.Module):
@@ -292,3 +284,24 @@ def dinov2_loss(
     loss = -(t_centered * s_lsm).sum(dim=-1)
     loss = T.nan_to_num(loss, nan=0.0, posinf=0.0, neginf=0.0)
     return loss.mean()
+
+
+@T.no_grad
+@T.cuda.amp.custom_fwd(cast_inputs=T.float32)
+def repulse(x: T.Tensor, num_iter: int = 1):
+    """Run the repulsion algorithm for a number of iterations."""
+    for _ in range(num_iter):
+        r = T.randn_like(x) * 1e-6
+        x = F.normalize(x + r)
+        a = T.cdist(x, x)
+        a.add_(1e-12).reciprocal_().fill_diagonal_(0).clamp_max_(1e6)
+        b = x * a.sum(1, keepdim=True)
+        c = T.mm(a, x)
+        x = b - c
+    return F.normalize(x)
+
+
+def repulse_loss(s_out: T.Tensor, t_out: T.Tensor) -> T.Tensor:
+    s_out = F.normalize(s_out)
+    t_out = repulse(t_out)
+    return F.smooth_l1_loss(s_out, t_out)

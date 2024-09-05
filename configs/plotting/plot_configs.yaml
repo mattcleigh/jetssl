@@ -3,13 +3,13 @@ jetclass_finetune:
   x_name: n_samples
   y_name: accuracy
   x_label: number of training samples
-  y_label: accuracy
+  y_label: accuracy (%)
   log_x: true
   show_grid: true
   figsize: [4, 4.2]
   x_lim: [500, 2.0e+8]
   y_lim: [20, 100]
-  inset_bounds: [0.05, 0.9, 0.8, 0.23]
+  inset_bounds: [0.05, 1.05, 0.9, 0.3]
   inset_loc: [5.0e+5, 1.5e+8, 83, 86]
   legend_kwargs: {loc: lower right, ncol: 1}
 

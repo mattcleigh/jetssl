@@ -20,45 +20,46 @@ container: config["container_path"]
 
 # Define important paths
 debug_mode = False
-fix_backbone = False
+fix_backbone = True
 project_name = "jetssl_fixed_frozen" if fix_backbone else "jetssl_fixed_finetune"
 output_dir = "/srv/beegfs/scratch/groups/rodem/jetssl/"
 backbones = "/srv/beegfs/scratch/groups/rodem/jetssl/jetssl_fixed/"
 wdir = config["workdir"]
 proj = str(Path(output_dir, project_name)) + "/"
 plot_dir = str(Path(wdir, "plots", project_name)) + "/"
-seeds = [0, 1, 2, 3, 4]
+seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
 model_names = [
-    "kmeans",
-    "reg",
-    "diff",
-    "flow",
-    "vae",
-    "mdm",
-    "untrained",
-    "nobackbone",
+    # "kmeans",
+    # "reg",
+    # "diff",
+    # "flow",
+    # "vae",
+    # "mdm",
+    "sdm",
+    # "untrained",
+    # "nobackbone",
 ]
 
 
 # Define the finetuning tasks
 downstream_tasks = [
     "jetclass",
-    "cwola",
-    "btag",
-    "vtx",
-    "trk",
+    # "cwola",
+    # "btag",
+    # "vtx",
+    # "trk",
 ]
 
 ########################################
 
 # If fixed -> use nobackbone as baseline
-if fix_backbone:
-    model_names.remove("untrained")
+# if fix_backbone:
+#     model_names.remove("untrained")
 # If fine-tuning -> use untrained as baseline
-else:
-    model_names.remove("nobackbone")
+# else:
+#     model_names.remove("nobackbone")
 
 # Final rule to form the endpoint of the DAG
 rule all:

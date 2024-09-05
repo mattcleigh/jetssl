@@ -46,6 +46,7 @@ class Classifier(LightningModule):
         # Load the pretrained and pickled JetBackbone object.
         log.info(f"Loading backbone from {backbone_path}")
         self.backbone: JetBackbone = T.load(backbone_path, map_location="cpu")
+        self.backbone.encoder.unpack_output = True
 
         # Create the head for the downstream task
         # Use logistic regression for binary classification
