@@ -16,9 +16,9 @@ from src.datamodules.preprocessing import batch_preprocess
 # Define the type of information to load into the dict from the HDF files
 # List containing: key, type, slice
 features = [
-    ("csts", "f", [64]),
-    ("csts_id", "f", [64]),
-    ("mask", "bool", [64]),
+    ("csts", "f", [128]),
+    ("csts_id", "f", [128]),
+    ("mask", "bool", [128]),
     ("labels", "l"),
     ("jets", "f"),
 ]
@@ -80,17 +80,20 @@ jc_data = JetMappable(
 )
 jc_labels = list(JC_CLASS_TO_LABEL.keys())
 
-# Plot distributions of the constituents
-bt_csts = bt_data.data_dict["csts"][bt_data.data_dict["mask"]]
-jc_csts = jc_data.data_dict["csts"][jc_data.data_dict["mask"]]
+# Make arrays of all the data
+bt_mask = bt_data.data_dict["mask"]
+jc_mask = jc_data.data_dict["mask"]
+bt_csts = bt_data.data_dict["csts"][bt_mask]
+jc_csts = jc_data.data_dict["csts"][jc_mask]
+bt_csts_id = bt_data.data_dict["csts_id"][bt_mask]
+jc_csts_id = jc_data.data_dict["csts_id"][jc_mask]
 
 # Make values of eta > 0.8 nans (ignored by plotting)
 jc_csts[np.abs(jc_csts[:, 1]) > 0.795, 1] = np.nan
 
 # Make the neutral jc impact parameters nans (ignored by plotting)
-bt_csts_id = bt_data.data_dict["csts_id"][bt_data.data_dict["mask"]]
-# is_neut = (jc_csts_id == 0) | (jc_csts_id == 2)
-# jc_csts[is_neut, 3:] = np.nan
+is_neut = (jc_csts_id == 0) | (jc_csts_id == 2)
+jc_csts[is_neut, 3:] = np.nan
 
 for i in range(len(cst_features)):
     plot_multi_hists(
@@ -156,8 +159,6 @@ id_types = [
     "$\\mu$\n-1",
     "$\\mu$\n+1",
 ]
-bt_csts_id = bt_data.data_dict["csts_id"][bt_data.data_dict["mask"]][..., None]
-jc_csts_id = jc_data.data_dict["csts_id"][jc_data.data_dict["mask"]][..., None]
 bt_counts = np.unique(bt_csts_id, return_counts=True)[1].astype("f")
 jc_counts = np.unique(jc_csts_id, return_counts=True)[1].astype("f")
 bt_counts /= bt_counts.sum()
@@ -170,9 +171,9 @@ multiplier = -0.5
 fig, ax = plt.subplots(figsize=(6, 3))
 for attribute, measurement in counts.items():
     offset = width * multiplier
-    rects = ax.bar(x + offset, measurement, width, label=attribute)
+    rects = ax.bar(x + offset, measurement, width, label=attribute, alpha=0.5)
     multiplier += 1
-ax.set_ylabel("a.u")
+ax.set_ylabel("Normalised Entries")
 ax.set_xticks(x, id_types)
 ax.legend(loc="upper right")
 ax.set_yscale("log")

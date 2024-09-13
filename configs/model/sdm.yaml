@@ -1,15 +1,15 @@
 _target_: src.models.sdm.MaskedDiffusionModelling
 
-time_dim: 32
+ctxt_dim: 32
 
 ctxt_config:
-  hddn_dim: 64
+  hddn_dim: 128
   num_blocks: 2
-  outp_dim: 8
+  act_h: SiLU
   norm: LayerNorm
 
 optimizer:
-  lr: 1.0e-4
+  lr: 5.0e-4
 
 decoder_config:
   do_output_linear: True

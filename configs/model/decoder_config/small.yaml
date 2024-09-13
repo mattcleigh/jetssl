@@ -1,5 +1,5 @@
-dim: 128
-num_layers: 4 # Deeper seems to be better but lets keep it at 4 for now
+dim: 256 # Half the size of the encoder
+num_layers: 8 # Deeper seems to be better but lets keep it at 4 for now
 do_packed: True # Much faster training but requires half precision
 do_input_linear: False # Keep this false to not mess with the enc_to_dec layer
 do_absolute_enc: False # No absolute positional encoding for mpm
