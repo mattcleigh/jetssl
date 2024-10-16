@@ -32,7 +32,7 @@ class MaskedDiffusionModelling(pl.LightningModule):
         optimizer: partial,
         scheduler: dict,
         class_head: partial,
-        time_dim: int = 32,
+        ctxt_dim: int = 32,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -43,16 +43,15 @@ class MaskedDiffusionModelling(pl.LightningModule):
         self.jets_dim = data_sample["jets"].shape[-1]
 
         # Attributes
-        self.time_dim = time_dim
-        self.ctxt_dim = ctxt_config["outp_dim"]
+        self.ctxt_dim = ctxt_dim
         self.n_classes = n_classes
 
         # The transformer encoder
-        self.encoder = Transformer(ctxt_dim=self.ctxt_dim, **encoder_config)
+        self.encoder = Transformer(ctxt_dim=ctxt_dim, **encoder_config)
         self.decoder = Transformer(
             inpt_dim=self.csts_dim + CSTS_ID,  # We concatenate the csts and csts_id
             outp_dim=self.csts_dim + CSTS_ID,  # Denoising, so inpt = outp
-            ctxt_dim=time_dim,
+            ctxt_dim=ctxt_dim,
             use_decoder=True,
             **decoder_config,
         )
@@ -70,8 +69,11 @@ class MaskedDiffusionModelling(pl.LightningModule):
         self.csts_emb = nn.Linear(self.csts_dim, self.dim)
         self.csts_id_emb = nn.Embedding(CSTS_ID, self.dim)
         self.enc_do_dec = nn.Linear(self.outp_dim, self.decoder.dim)
-        self.time_encoder = CosineEncodingLayer(inpt_dim=1, encoding_dim=time_dim)
-        self.jets_emb = MLP(inpt_dim=self.jets_dim, **ctxt_config)
+        self.jets_emb = MLP(inpt_dim=self.jets_dim, outp_dim=ctxt_dim, **ctxt_config)
+        self.time_encoder = nn.Sequential(
+            CosineEncodingLayer(inpt_dim=1, encoding_dim=ctxt_dim),
+            MLP(inpt_dim=ctxt_dim, outp_dim=ctxt_dim, **ctxt_config),
+        )
 
         # Basic classifier and accuracy for evaluating encoder
         self.class_head = class_head(inpt_dim=self.outp_dim, outp_dim=n_classes)
@@ -95,7 +97,7 @@ class MaskedDiffusionModelling(pl.LightningModule):
         x = self.csts_emb(csts) + self.csts_id_emb(csts_id)  # Inputs to encoder
         y = T.cat([csts, F.one_hot(csts_id, CSTS_ID)], dim=-1)  # Inputs to decoder
 
-        # Embed the jets
+        # Embed the jets (high-level context)
         ctxt = self.jets_emb(jets)
 
         # Get the output of the encoder with the null mask

@@ -332,7 +332,8 @@ def plot_metric(
         ax0.grid(True, which="major", ls="--", alpha=0.5)
         ax1.grid(True, which="major", ls="--", alpha=0.5)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.05, top=0.75)
+    if inset_bounds is not None:
+        fig.subplots_adjust(hspace=0.05, top=0.75)
 
     # Make the directory and save the plot
     Path(path).parent.mkdir(parents=True, exist_ok=True)
