@@ -63,7 +63,7 @@ def main() -> None:
             sublist = [x for x in files if int(x.stem.split("_")[-1]) == num]
             for h5name in tqdm(sublist, leave=False):
                 with h5py.File(h5name, "r") as h5fr:
-                    for k in buffer:
+                    for k in buffer:  # noqa: PLC0206
                         buffer[k].append(h5fr[k][:])
 
             # Shuffle each list in the buffer
