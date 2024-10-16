@@ -81,10 +81,12 @@ class TaskBase(nn.Module):
         return outputs
 
     @T.no_grad()
-    def visualise(self, parent: nn.Module, data: dict) -> None:
+    def visualise(self, parent: nn.Module, data: dict) -> T.Tensor:
         """Visualise the task."""
         Path("plots").mkdir(exist_ok=True)
-        self._visualise(parent, deepcopy(data))  # Don't want to modify the original
+        return self._visualise(
+            parent, deepcopy(data)
+        )  # Don't want to modify the original
 
     def on_fit_start(self, parent: nn.Module) -> None:
         """At the start of the fit, allow to pass without error."""
@@ -93,7 +95,7 @@ class TaskBase(nn.Module):
         """Get the loss for the task."""
         raise NotImplementedError
 
-    def _visualise(self, parent: nn.Module, data: dict) -> None:
+    def _visualise(self, parent: nn.Module, data: dict) -> T.Tensor:
         """Visualise the task, optional."""
 
 
@@ -127,6 +129,7 @@ class IDTask(TaskBase):
         pred = T.softmax(pred, dim=-1)
         pred = T.multinomial(pred, 1).squeeze(1)
         plot_labels(data, pred)
+        return pred
 
 
 class RegTask(TaskBase):
@@ -146,6 +149,7 @@ class RegTask(TaskBase):
         """Sample and plot the outputs of the head."""
         pred = self.head(self.get_head_input(data))
         plot_continuous(data, pred)
+        return pred
 
 
 class FlowTask(TaskBase):
@@ -185,6 +189,7 @@ class FlowTask(TaskBase):
         ctxt = self.head(self.get_head_input(data))
         pred = self.flow.sample(ctxt.shape[0], context=ctxt)[0]
         plot_continuous(data, pred)
+        return pred
 
 
 class KmeansTask(TaskBase):
@@ -225,6 +230,7 @@ class KmeansTask(TaskBase):
         pred = T.multinomial(pred, 1).squeeze(1)
         pred = self.kmeans.centroids.index_select(1, pred).T
         plot_continuous(data, pred)
+        return pred
 
 
 class VQVAETask(TaskBase):
@@ -267,13 +273,14 @@ class DiffTask(TaskBase):
         target = data["csts"][data["null_mask"]]
         return self.diff.get_loss(target, ctxt)
 
-    def _visualise(self, parent: nn.Module, data: dict) -> dict:
+    def _visualise(self, parent: nn.Module, data: dict) -> T.Tensor:
         """Sample and plot the outputs of the head."""
         ctxt = self.head(self.get_head_input(data))
         x1 = T.randn((ctxt.shape[0], parent.csts_dim), device=ctxt.device)
         times = T.linspace(1, 0, 50, device=ctxt.device)
         pred = self.diff.generate(x1, ctxt, times)
         plot_continuous(data, pred)
+        return pred
 
 
 class ProbeTask(TaskBase):

@@ -240,7 +240,7 @@ class MaskedParticleModelling(pl.LightningModule):
             csts_emb=self.csts_emb,
             csts_id_emb=self.csts_id_emb,
             encoder=self.encoder,
-            jets_emb=self.jets_emb,
+            ctxt_emb=self.jets_emb,
         )
         backbone.eval()
         T.save(backbone, "backbone.pkl")

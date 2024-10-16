@@ -42,11 +42,11 @@ _LABELS = {
     "nobackbone": "No Backbone",
     "untrained": "From Scratch",
     "reg": "Regression",
-    "diff": "Diffusion",
-    "flow": "Flow",
+    "diff": "CFM",
+    "flow": "CNF",
     "vae": "VQVAE",
     "kmeans": "K-Means",
-    "mdm": "SDM",
+    "mdm": "SSFM",
 }
 
 

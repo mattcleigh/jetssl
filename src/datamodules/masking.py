@@ -40,7 +40,7 @@ def random_pt_masking(
 def random_masking(
     csts: np.ndarray,
     mask: np.ndarray,
-    mask_fraction: float = 0.5,
+    mask_fraction: float = 0.4,
     seed: int | None = None,
 ) -> np.ndarray:
     """Randomly drop a fraction of the jet based on the total number of constituents."""
