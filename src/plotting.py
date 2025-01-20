@@ -54,7 +54,6 @@ def print_latex_table(df, col1="accuracy", col2="n_samples"):
     df["model"] = df["model"].map(_LABELS)
     grouped = df.groupby(["model", col2])[col1]
     means = grouped.mean().unstack(level=0)
-    pivot_table(index=col2, columns="model", values=col1, aggfunc="mean")
     stds = grouped.std().unstack(level=0)
     argmax = means.idxmax(axis=1)
     means = means.map(lambda x: f"{x:.2f}")
