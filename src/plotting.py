@@ -50,6 +50,22 @@ _LABELS = {
 }
 
 
+def print_latex_table(df, col1="accuracy", col2="n_samples"):
+    df["model"] = df["model"].map(_LABELS)
+    grouped = df.groupby(["model", col2])[col1]
+    means = grouped.mean().unstack(level=0)
+    stds = grouped.std().unstack(level=0)
+    argmax = means.idxmax(axis=1)
+    means = means.map(lambda x: f"{x:.2f}")
+    stds = stds.map(lambda x: f"{x:.2f}")
+    combined = means + r" \pm " + stds
+    for idx, model in argmax.items():
+        combined.loc[idx, model] = f"\\bm{{{combined.loc[idx, model]}}}"
+    combined = combined[[v for k, v in _LABELS.items() if v in combined.columns]]
+    combined = "$" + combined + "$"
+    print(combined.to_latex())
+
+
 def plot_labels(data: dict, pred: T.Tensor, n_samples: int = 5) -> None:
     # Unpack the data
     csts_id = data["csts_id"]

@@ -11,7 +11,7 @@ onnxruntime==1.17.3
 # flash attention 2
 packaging==24.0
 ninja==1.11.1.1
-flash-attn==2.5.7
+flash-attn==2.7.2.post1
 
 # fast clusering and kmeans
 cupy-cuda12x==13.1.0

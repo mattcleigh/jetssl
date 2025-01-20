@@ -65,7 +65,7 @@ vtx_finetune_ari:
   x_name: n_vtx
   y_name: ari
   x_label: secondary vertices per jet
-  y_label: balanced accuracy (%)
+  y_label: ARI
   show_grid: true
   figsize: [4, 4]
   y_lim: [0.40, 0.65]

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
-from src.plotting import plot_metric
+from src.plotting import plot_metric, print_latex_table
 
 np.seterr(divide="ignore", invalid="ignore")
 
@@ -95,6 +95,7 @@ def main(cfg: DictConfig):
 
     # Combine the data into a pandas dataframe
     df = pd.DataFrame(rows, columns=cols)
+    print_latex_table(df, "acc", "n_trk")
 
     flag = f"{cfg.prefix}_{cfg.suffix}"
     with open(root / "configs/plotting/plot_configs.yaml") as f:

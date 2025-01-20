@@ -6,10 +6,10 @@ import torch.nn.functional as F
 from torch import nn
 from torchmetrics import Accuracy
 
-from mltools.mltools.diffusion import cfm_vals
+from mltools.mltools.diffusion import cfm_values
 from mltools.mltools.lightning_utils import simple_optim_sched
 from mltools.mltools.mlp import MLP
-from mltools.mltools.modules import CosineEncodingLayer
+from mltools.mltools.modules import CosineEncoding
 from mltools.mltools.transformers import Transformer
 from src.models.utils import JetBackbone
 
@@ -47,7 +47,7 @@ class MaskedDiffusionModelling(pl.LightningModule):
         self.n_classes = n_classes
 
         # The transformers
-        self.encoder = Transformer(ctxt_dim=ctxt_dim, **encoder_config)
+        self.encoder = Transformer(**encoder_config)
         self.decoder = Transformer(
             inpt_dim=self.csts_dim + CSTS_ID,  # csts and csts_id are concatenated
             outp_dim=self.csts_dim + CSTS_ID,  # Denoising, so inpt = outp
@@ -71,7 +71,7 @@ class MaskedDiffusionModelling(pl.LightningModule):
         self.enc_do_dec = nn.Linear(self.outp_dim, self.decoder.dim)
         self.jets_emb = MLP(inpt_dim=self.jets_dim, outp_dim=ctxt_dim, **ctxt_config)
         self.time_encoder = nn.Sequential(
-            CosineEncodingLayer(inpt_dim=1, encoding_dim=ctxt_dim),
+            CosineEncoding(inpt_dim=1, outp_dim=ctxt_dim),
             MLP(inpt_dim=ctxt_dim, outp_dim=ctxt_dim, **ctxt_config),
         )
 
@@ -89,23 +89,24 @@ class MaskedDiffusionModelling(pl.LightningModule):
         labels = data["labels"]
 
         # Split the jets into the two sets (done by masking only)
-        mask_1 = mask & ~null_mask
-        mask_2 = mask & null_mask
+        enc_mask = mask & ~null_mask
+        dec_mask = mask & null_mask
 
         # Representations for the models (masking/splitting is later)
         x = self.csts_emb(csts) + self.csts_id_emb(csts_id)  # Inputs to encoder
-        y = T.cat([csts, F.one_hot(csts_id, CSTS_ID)], dim=-1)  # Inputs to decoder
+        y = T.cat([csts, F.one_hot(csts_id, CSTS_ID)], dim=-1)  # Targets for decoder
 
-        # Get the output of the encoder with the null mask
-        enc_out, enc_culens, enc_maxlen = self.encoder(x, mask=mask_1)
+        # Get the output of the encoder (will be packed)
+        enc_out, enc_culens, enc_maxlen = self.encoder(x, mask=enc_mask)
 
         # Sample diffusion time and the noise
-        xt, v, _, _, ctxt_t = cfm_vals(y, time_embedding=self.time_encoder)
+        xt, v, _, _, ctxt_t = cfm_values(y, time_embedding=self.time_encoder)
+        v = v[dec_mask]
 
-        # Get the output of the decoder using the opposite mask, time and context
+        # Get the output of the decoder using, time and context
         v_hat, _, _ = self.decoder(
             xt,
-            mask=mask_2,
+            mask=dec_mask,
             ctxt=ctxt_t,
             kv=self.enc_do_dec(enc_out),  # Resize for the decoder
             kv_culens=enc_culens,
@@ -113,7 +114,7 @@ class MaskedDiffusionModelling(pl.LightningModule):
         )
 
         # Calculate the loss based on the velocity vector
-        diff_loss = (v_hat - v[mask_2]).square().mean()
+        diff_loss = (v_hat - v).square().mean()
         self.log(f"{prefix}/diff_loss", diff_loss)
 
         # Run the probe to evaluate the embedding using the teacher's output

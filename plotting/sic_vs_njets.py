@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
-from src.plotting import plot_metric
+from src.plotting import plot_metric, print_latex_table
 
 
 @hydra.main(
@@ -78,17 +78,7 @@ def main(cfg: DictConfig):
 
     # Combine the data into a pandas dataframe
     df = pd.DataFrame(rows, columns=columns)
-
-    # Combine the data into a pandas dataframe
-    df = pd.DataFrame(rows, columns=columns)
-
-    # Print the mean and std using n_samples=100M
-    print("Mean and std for n_samples=100M")
-    mask = df["n_samples"] == 500
-    means = df[mask].groupby("model")["sic"].mean()
-    stds = df[mask].groupby("model")["sic"].std()
-    for model, mean, std in zip(means.index, means, stds):
-        print(f"{model}: {mean:.2f} ± {std:.2f}")
+    print_latex_table(df, "sic")
 
     flag = f"{cfg.prefix}_{cfg.suffix}"
     with open(root / "configs/plotting/plot_configs.yaml") as f:

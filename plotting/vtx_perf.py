@@ -13,7 +13,7 @@ root = rootutils.setup_root(search_from=__file__, pythonpath=True)
 
 
 from src.models.vertexer import get_ari
-from src.plotting import plot_metric
+from src.plotting import plot_metric, print_latex_table
 
 
 @hydra.main(
@@ -113,6 +113,7 @@ def main(cfg: DictConfig):
 
     # Combine the data into a pandas dataframe
     df = pd.DataFrame(rows, columns=cols + metrics)
+    print_latex_table(df, "ari", "n_vtx")
 
     # Cycle through the classes and plot the results
     for metric in metrics:

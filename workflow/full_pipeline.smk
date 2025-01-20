@@ -31,13 +31,13 @@ seeds = [0] #, 1, 2, 3, 4]
 
 # Define the model backbones to finetune
 model_names = [
-    # "kmeans",
-    # "reg",
-    # "diff",
+    "kmeans",
+    "reg",
+    "diff",
     # "flow",
     # "vae",
     # "mdm",
-    "sdm",
+    # "sdm",
     # "untrained",
     # "nobackbone",
 ]
@@ -46,10 +46,10 @@ model_names = [
 # Define the finetuning tasks
 downstream_tasks = [
     "jetclass",
-    # "cwola",
-    # "btag",
-    # "vtx",
-    # "trk",
+    "cwola",
+    "btag",
+    "vtx",
+    "trk",
 ]
 
 ########################################

@@ -8,7 +8,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from torchdiffeq import odeint
 
 from mltools.mltools.mlp import MLP
-from mltools.mltools.modules import CosineEncodingLayer
+from mltools.mltools.modules import CosineEncoding
 from mltools.mltools.torch_utils import ema_param_sync
 from mltools.mltools.transformers import Transformer
 
@@ -110,7 +110,7 @@ class VectorDiffuser(nn.Module):
         mlp_config: dict,
     ) -> None:
         super().__init__()
-        self.time_encoder = CosineEncodingLayer(inpt_dim=1, encoding_dim=time_dim)
+        self.time_encoder = CosineEncoding(inpt_dim=1, outp_dim=time_dim)
         self.mlp = MLP(
             inpt_dim=inpt_dim,
             outp_dim=inpt_dim,
